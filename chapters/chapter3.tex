@@ -1,0 +1,1562 @@
+%!TEX root = ../dissertation.tex
+
+\chapter{Laconic Private Set Intersection}
+\label{sec:laconicpsi}
+\newthought{In this chapter}, we move on to discuss the second PSI-related problem in privacy-preserving computation, concentrating on communication bandwidth in an unbalanced setting. We provide a brief overview of this problem below.
+
+Consider a server with a \emph{large} set $S$
+ of strings $\{x_1,x_2\ldots,x_N\}$ that would like to publish a \emph{small} hash $h$ of its set $S$ such that any client with a string $y$ can send the server a \emph{short} message allowing it to learn $y$ if $y \in S$ and nothing otherwise. In this chapter, we study this problem of two-round private set intersection with low (asymptotically optimal) communication cost, or what we call \emph{laconic} private set intersection (\ePSI) and its extensions. This problem is inspired by the recent general frameworks for laconic cryptography~\cite{C:CDGGMP17,FOCS:QuaWeeWic18}.
+
+We start by showing the first feasibility result for realizing \ePSI~ based on the CDH assumption, or LWE with polynomial noise-to-modulus ratio\footnote{Refer to~\cref{sec:prelim} for details about these hardness assumptions.}. However, these feasibility results use expensive non-black-box cryptographic techniques leading to significant inefficiency. Next, with the goal of avoiding these inefficient techniques, we give a construction of \ePSI~schemes making only  black-box use of cryptographic functions. Our construction is secure against semi-honest receivers, and malicious senders and reusable in the sense that the receiver's message can be reused across any number of executions of the protocol. The scheme is secure under the $\phi$-hiding, decisional composite residuosity and subgroup decision assumptions. 
+
+At the end of this chapter, we show natural applications of \ePSI~to realize a semantically-secure encryption scheme that supports the detection of encrypted messages belonging to a set of ``illegal'' messages (e.g., an illegal video) circulating online.
+Over the past few years, significant effort has gone into realizing laconic cryptographic protocols. Nonetheless, this thesis provides the first black-box constructions of such protocols for a natural application setting.
+
+\section{Overview}
+Laconic cryptography \cite{C:CDGGMP17,FOCS:QuaWeeWic18,C:DGIMMO19,FOCS:DGGM19} is an emerging paradigm which enables realizing cryptographic tasks with asymptotically-optimal communication in just two messages. In this setting, the receiver has a potentially large input, and the size of her protocol message only depends on the security parameter and not her input size. The second message, sent by the sender, may grow with the size of the sender's input but should be independent of the receiver's input size.
+
+The pioneering work of~\cite{C:CDGGMP17} introduced the notion of laconic oblivious transfer (laconic OT), which allows a receiver with a large input $D \in \bits^n$ to send a short hash digest $h$ of her input $D$. Next, a sender  with an input $(i \in [n], m_0, m_1)$, sends a short message $\mathsf{ots}$ to the receiver, enabling the receiver to learn $m_{D[i]}$, and nothing more. We require (a) the sizes of $h$ and $\mathsf{ots}$  be  $\poly[\log(n), \secpar]$, where $\secpar$ is the security parameter; (b)  the sender's computation time be $\poly[\log(n), \secpar]$ and (c) and receiver's second-phase computation time be $\poly[\log(n), \secpar]$. 
+
+The notion of laconic OT, and the  techniques built around it, have led to breakthrough results in the last few years, which, among others, include the first construction of identity-based encryption from CDH~\cite{C:DotGar17,TCC:DotGar17,EC:BLSV18,PKC:DGHM18}, and two-round MPC protocols from minimal assumptions~\cite{FOCS:GarSri17,EC:GarSri18a,EC:BenLin18}.
+
+
+\paragraph{Laconism beyond OT?} Motivated by the developments enabled by laconic OT, it is natural to ask whether we can push the boundary further, realizing laconism for richer functionalities. Laconic OT by itself does not seem to be sufficient for this task (at least generically). Specifically, the general laconic OT+garbled circuit-based approach for a function $f (\cdot, \cdot)$ results in protocols in which the size of the sender's protocol message grows with the receiver's input size. 
+
+The work of Quach, Wee and Wichs~\cite{FOCS:QuaWeeWic18} shows how to realize laconic cryptography for general functionalities using LWE. However, two significant issues remain. Firstly, it is not clear whether we can achieve laconism from other assumptions, for functionalities beyond OT. As mentioned above, research in laconic OT has led to several breakthrough feasibility results, motivating the need for developing techniques that can be realized using wider assumptions and for richer functionalities. Secondly, existing constructions of laconic primitives are non-black-box, leading to inefficient constructions.  
+Addressing the above shortcomings, our goals are twofold: (1) Feasibility: Can we realize laconic primitives beyond OT from assumptions other than LWE? and (2) Black-boxes: Can we make the constructions black-box? 
+
+ 
+ 
+ \paragraph{Black-box techniques.} We use the notion of ``black-box" techniques in the sense that the construction should not use an explicit circuit-level description of cryptographic primitives. In this sense, we think of constructions which e.g., compute cryptographic primitives inside garbled circuits (as previous laconic OT constructions) or use general-purpose NIZK proofs (which express statements in terms of NP-complete languages) as ``non-black-box" techniques.
+
+\paragraph{Laconic PSI.} We make the first progress toward the above two goals with respect to a non-trivial functionality: Laconic Private Set Intersection (\ePSI) and its family where the private set intersection is recalled in~\cref{sec:threshpsi}.
+
+Laconic PSI allows a receiver to send a short digest of its large data set, which in turn can be used by a sender to compute a PSI  second-round message. We require  that the total communication complexity as well as the sender's running time be independent of the receiver's input size. 
+
+ \subsection{Results}
+As our first result, we give a generic construction of  laconic PSI from a primitive called anonymous hash encryption, which in turn can be realized from CDH/LWE~\cite{C:DotGar17,TCC:DotGar17,EC:BLSV18}. Our construction builds on the Merkle-tree garbled circuit-based approach of~\cite{C:DotGar17,TCC:DotGar17,EC:BLSV18,TCC:GHMR18,PKC:GHMRS19,C:GoyVus20}, showing how to use garbled circuits to perform  binary search on a set of sorted values. Prior to our work there did not exist any construction of a laconic primitive from CDH beyond OT. We also obtain an LWE instantiation with polynomial modulus to noise ratio, improving the subexponential ratio of~\cite{FOCS:QuaWeeWic18}.
+
+The above construction is a non-black-box caused by the use of garbled circuits. As our second contribution, we achieve a black-box construction of  laconic PSI from the $\phi$-hiding assumption. 
+
+
+Both constructions above are only semi-honest secure, and can be made malicious (UC) secure by using Non-Interactive Zero Knowledge (NIZK).\footnote{Note that in the laconic setting, we cannot prove malicious security against a receiver since it is information-theoretically impossible to extract its input. Thus, since the NIZK will only be computed by the sender, the protocol will remain laconic.} However, the eventual protocol will be non-black-box. To enhance applicability, we show how to make our second construction secure against  malicious senders, and semi-honest receivers in the CRS model, by additionally assuming decisional composite residuosity (DCR) and subgroup decision assumptions. We term this notion \emph{reusable malicious} laconic PSI, meaning the receiver's message may be re-used.\footnote{We use the word reusability only in conjunction with malicious security since in the semi-honest setting, reusability is satisfied by default.}
+
+
+\paragraph{Applications.} We show an application of laconic PSI in realizing a primitive that we dub self-detecting encryption. Self-detecting encryption acts  like normal public-key encryption with a key difference in that it is possible to detect whether the underlying message of a given ciphertext belongs to a database of special (e.g., ``illegal”) messages. This can be determined  just by knowing the database values, as opposed to the system's secret key. Such encryption systems provide a feature for detecting the presence of illegal content, without compromising the privacy of legal messages.  There has only been a  limited number of proposals for this task so far, and  all of them use heavy tools (e.g., FHE) for this purpose (see~\cite{Green19} for more details). We formally define this notion and show how to realize it using laconic PSI. 
+
+In self-detecting encryption, an authority (e.g., a government entity or a delegated NGO) publishes a small hash value of a (possibly  large) database of special messages such that a user can encrypt a message using the system's public key and the hash value. 
+
+If the message belongs to the database, then the authority can detect it; else, the message remains hidden from the authority. We require that the size of the hash and the encryption running time be independent of the database size.
+
+We note that attribute-based encryption does not provide a solution to the above problem, because either the authority should reveal its database to a master-key generator, or it should be the master-key generator itself -- both of which defeat our security purposes.
+
+ 
+\paragraph{Additional new results: Labeled laconic PSI and malicious laconic OT (LOT).} We extend  our laconic PSI techniques to build a reusable \emph{labelled} laconic PSI. Labelled PSI \cite{SCN:JarLiu10,CCS:CHLR18} is a flavour of  PSI, where the sender holds a \emph{label} $\ell_i$ associated with each set element $x_i$, and the receiver will learn the labels corresponding to the intersection elements.
+Labelled PSI has several practical applications (e.g., private web service queries \cite{CCS:CHLR18}).
+ 
+ Moreover,  we show how to use our techniques to realize the first construction of a reusable LOT secure against malicious senders and semi-honest receivers.
+
+\paragraph{DV-NIZK range proofs for DJ ciphertexts.}
+
+As a building block for our laconic PSI protocol, we propose a Designated-Verifier Non-Interactive Zero-Knowledge (DV-NIZK\footnotemark) scheme for range proof with Damg{\aa}rd Jurik (DJ) ciphertexts, which may be of independent interest. 
+Our DV-NIZK has statistical simulation soundness and computational zero-knowledge given that the subgroup decision (SD) assumption holds \cite{TCC:BonGohNis05,EC:GroOstSah06}.
+ 
+\footnotetext{DV-NIZK \emph{only} allows the designated prover to prove that it holds a witness for a certain $\npol$ statement to a verifier in just one message}
+
+Such range proofs can also be constructed in the random oracle model (ROM) via the Fiat-Shamir transform (e.g., \cite{PKC:DamJur01,C:BBCdGL18,SP:BBBPWM18,CCS:TBMDKS20}), which might yield the best efficiency. 
+ As our LPSI construction is modular, this can be done independently of the remaining results in the paper. The goal of our DV-NIZK is to provide an efficient standard model construction which we see as a reasonable middle ground between feasibility from the weakest assumption (at the cost of unrealistic efficiency) and practical efficiency (at the cost of relying on strong heuristic assumptions such as the ROM). 
+
+
+
+\subsection{Previous Work}
+\label{subsec:previouswork}
+
+Laconic PSI can be seen as a particular case of unbalanced PSI. Protocols for unbalanced PSI were presented in \cite{PKC:AteDeCTsu11,FC:ResAra18,CCS:CheLaiRin17,CCS:CHLR18}. The protocol of \cite{FC:ResAra18} achieves linear communication complexity on the receiver's set size in the \emph{pre-processing} model. The protocols of \cite{CCS:CheLaiRin17,CCS:CHLR18} rely on somewhat homomorphic encryption (SWHE) and proceed in two rounds. However, the communication complexity scales with the size of the receiver's set (and logarithmic with the size of the sender's set), in contrast with our protocol whose communication complexity scales with the sender's set size.
+
+\paragraph{Comparison with~\cite{PKC:AteDeCTsu11}.}  Ateniese et al. in \cite{PKC:AteDeCTsu11} proposed a semi-honest size-hiding PSI protocol\footnote{Such schemes were also studied in \cite{TCC:IshPas07,AC:LinNisOrl13,ITCS:HubWic15}.} inspired by RSA accumulators that achieve communication complexity independent of the receiver's set size. However, we emphasize that their scheme does not fit the framework of laconic cryptography since it requires the sender to  know the factorization of a CRS modulus N. Thus, either it requires pre-processing (giving a designated secret key to the sender), or it requires three rounds in the CRS model. In contrast, laconic cryptography requires (a)  two rounds and (b) no pre-processing (i.e., neither party receives a secret key correlated with the CRS). Both (a) and (b) are crucially used in applications of laconic cryptography. Specifically, these restrictions prevent the use of \cite{PKC:AteDeCTsu11} in settings with multiple senders, an aspect that has been critical for laconic cryptography applications. Finally, we remark that the security of \cite{PKC:AteDeCTsu11} relies on random oracles, whereas we prove security in the standard model and achieve a substantially stronger security notion without resorting to heavy generic tools. 
+
+
+All of the above constructions are just secure against semi-honest adversaries, except for \cite{CCS:CHLR18} which achieves security against a malicious receiver.
+
+\subsection{Open Problems}
+The main open question is to realize laconic cryptography for functionalities richer than PSI. A second question is to build laconic PSI in a black-box way from assumptions not involving $\phi$-hiding (e.g., pairings alone). 
+
+
+In this chapter, we build DV-NIZK for proving the equality of plaintexts across different encryption schemes, namely between the DJ \cite{PKC:DamJur01} and the BGN \cite{TCC:BonGohNis05,EC:GroOstSah06} encryption schemes. This scheme opens the door to new applications since it allows us to extend the capabilities of GS/GOS proof systems \cite{EC:GroOstSah06,EC:GroSah08} to non-pairing-based primitives with additional properties (in our case to the DJ cryptosystem). We believe that these ideas will have applications beyond range proofs, e.g., one can think of further uses of structure-preserving cryptography, so we leave this as an open problem for future works.
+
+\section{Techniques}
+\label{sec:overview}
+
+\def \pick{\leftarrow_\$}
+\def \Ext{\mathsf{Ext}}
+\def \Enc{\mathsf{Enc}}
+
+\subsection{Semi-Honest PSI from CDH/LWE} Our protocol uses hash encryption and garbled circuits, building on~\cite{C:DotGar17,EC:BLSV18,TCC:GHMR18}, while introducing new techniques. A hash-encryption scheme allows one to encrypt a message $m$ to the output $h$ of a hash function by specifying an index/bit $(i,b)$ (denoted $\HEnc(h,m, (i,b))$), so that knowledge of a consistent pre-image value  $z$ allows for decryption  ($\Hash(z) = h$ and $z_i = b$)  while having semantic security against inconsistent pre-image values (i.e., against $z$ where $\Hash(z) = h$ but $z_i = \bar{b}$).\footnote{$\Enc$ also takes as input a public parameter $\pp$, which we ignore here.}
+
+In all discussion below we assume the sender's and receiver's elements are in $\bits^\secpar$ and that the output of $\Hash$  also has $\secpar$ bits.
+
+
+\paragraph{Receiver's set size is 2.} We first assume the receiver has only two elements $S_\Rs = \{\id_1 , \id_2 \}$ and the sender has a single element $\id$. The receiver sends  $\hr := \Hash(\id_1, \id_2)$. Consider a circuit $\al{F}[\id]$, with $\id$ hardwired, which on input $(\id', \id'')$ outputs $\id$ if $\id \in \{\id', \id''\}$; else,  $\bot$. The sender garbles $\al{F}[\id]$ to get $(\wt{\al{C}}_0,\{ \lb_{i,b}  \})$\footnotemark and sends $\psi_2 := (\wt{\al{C}}_0 , \{ \ct_{i,b} \})$, where  $ \ct_{i,b} := \HEnc(\hr , \lb_{i,b} , (i,b) ))$. The receiver who has the pre-image $z:= (\id_1, \id_2)$ can  retrieve only the labels $\lb_{i,z_i}$, and the rest will be hidden.  Thus, by garbled circuit security, the receiver will only learn the output of $\al{F}[\id](\id_1, \id_2)$, as desired.
+
+\footnotetext{$\wt{\al{C}}_0$ stands for the garbled circuit and $\{\lb_{i,b}\}_i$ are the corresponding labels of inputs.}
+
+\paragraph{Moving beyond  $|S_\Rs| = 2$.} Suppose the receiver has four elements $S_\Rs = \{ \id_1, \id_2, \id_3, \id_4 \}$  in ascending order. The receiver Merkle-hashes all these values and sends $\hr$, the root hash. Let $h_1$ and $h_2$ be the two hash values at level one (i.e., $h_1 = \Hash(\id_1, \id_2)$). If the sender knows the value of, say, $h_1$, he may hash-encrypt $\{\lb_{i,b} \}$ (defined in the previous paragraph) under $h_1$, so that the receiver can only open the  labels that correspond to the bits of $z = (\id_1, \id_2)$, revealing the value of $\al{F}[\id](\id_1, \id_2)$. However,  $h_1$ is statistically hidden given $\hr$. Thus, we use the idea of deferred evaluation~\cite{C:DotGar17,C:CDGGMP17,TCC:DotGar17,EC:BLSV18}, delegating  the task of hash-encrypting $\{\lb_{i,b} \}$ to the receiver herself, via  garbled circuits.
+
+In essence, we want the receiver to be able to compute the hash encryption of $\{\lb_{i,b} \}$ wrt either $h_1$ or $h_2$ (depending on whether $\id \leq \id_2$ or not), but not both; because obtaining both hash encryptions will  allow the receiver to open  both labels $\lb_{i,0}$ and $\lb_{i,1}$ for some indices $i$ (because $(\id_1, \id_2) \neq (\id_3, \id_4)$), destroying garbled circuit security. Thus, the sender has to make sure that the receiver will be able to obtain only either of the above hash encryptions, the one whose sub-tree contains $\id$. To enable this, we perform a binary search.
+
+
+\paragraph{Performing binary search.} We handle the above difficulty by performing \emph{binary search}  using ideas developed in the context of registration-based encryption~\cite{TCC:GHMR18}.  The hash of each node is now computed as the hash of the concatenation of its left child's hash, right child's hash, and the largest identity under its left child. For example, the hash root is $\hr = \Hash(h_1, h_2 , \id_2)$, where $h_1$ and $h_2$ are the hash values of the two nodes in the first level, and in turn,   $h_1 = \Hash(\id_1, \id_2 , \id_1 )$. Now let $\id$ be the sender's element, and change $\al{F}[\id]$ to be a circuit that on input $(\id', \id'', *)$ outputs $\id$ if $\id \in \{ \id', \id''\}$, else $\bot$. Letting $(\wt{\al{C}}_0, \{\lb_{i,b} \})$ be the garbling of $\al{F}[\id]$, consider a circuit $\al{G}[\id, \{\lb_{i,b}\}]$ which on input $(h,h', \id')$ outputs  a hash-encryption of $\lb_{i,b}$ either under $h$ or under $h'$, depending on whether $\id \leq \id'$ or $\id > \id'$. Let $(\wt{\al{C}'} , \{\lb' \}_{i,b})$ be the garbling of $\al{G}[\id, \{\lb_{i,b}\}]$, let $\{ \ct_{i,b} \}$ be the hash encryption of $\{\lb'_{i,b} \}$ wrt $\hr$, and return $\psi_2 := (\wt{\al{C}}_0 , \wt{\al{C}'}, \{\ct_{i,b} \}  )$. Using the pre-image $z := (h_1, h_2, \id_2)$ of $\hr$, the receiver can retrieve the labels $\{ \lb'_{i, z[i] }\}$, allowing to compute $\al{G}[\id, \{\lb_{i,b}\}](h_1, h_2, \id_2)$, which will produce a hash encryption $\{\ct'_{i,b} \}$ of $ \{ \lb_{i,b}\}$ under either $h_1$ or $h_2$, depending on whether $\id \leq \id_2$, or not. For concreteness, suppose $\id \leq \id_2$, meaning that $\{\ct'_{i,b} \}$ are formed under $h_1$, and so the pre-image $z' = (\id_1, \id_2, \id_1)$ of $h_1$ will lead to $\{ \lb_{i, z'_i} \}$, which along with $\wt{\al{C}}_0$ will reveal the value of $\al{F}[\id](\id_1, \id_2, \id_1)$. Of course, the receiver \emph{a priori} does not know whether $\{\ct'_{i,b} \}$ are encryptions under $h_1$ or $h_2$, so the receiver should try decrypting wrt both, and see which one succeeds.
+
+\paragraph{Are we done?} Unfortunately, when arguing about security, a subtle issue emerges. Suppose a hash-encryption ciphertext reveals its hash value (e.g., the hash is appended to the ciphertext). Then, the ciphertexts $\{\ct'_{i,b} \}$ will reveal whether they were encrypted under $h_1$ or $h_2$;  equivalently, whether $\id \leq \id_2$ or $\id > \id_2$. We cannot allow this information to be leaked if $\id \notin S_\Rs$. To fix this issue we  assume the hash-encryption scheme is \emph{anonymous}, meaning that, roughly, a random ciphertext leaks no information about the underlying hash value. This property was defined in~\cite{EC:BLSV18} for achieving anonymous IBE. The use of anonymous hash encryption does not resolve the issue completely yet. For concreteness, suppose $\id < \id_1$. This means that $\{\ct'_{i,b} \}$ is encrypted under $h_1$, and so by decrypting $\{\ct'_{i,b} \}$ using  $z' = (\id_1, \id_2, \id_1)$, the receiver will obtain meaningful labels, evaluating the garbled circuit $\wt{\al{C}}_0$ to $\bot$ (rightly so, because $\id \notin S_\Rs$). On the other hand, if the receiver tries decrypting $\{\ct'_{i,b} \}$ using  $z'' = (\id_3, \id_4, \id_3)$ which is not a pre-image of $h_1$, then the resulting labels will be meaningless, evaluating $\wt{\al{C}}_0$ to  junk. This leaks which path is the right binary search path, giving information about $\id$. To fix this issue, we change the circuit $\al{F}$ so that if $\id \notin S_\Rs$, then decryption along any path will result in a random value. Specifically, sample two random values $r$ and $r'$, let $\al{F}[\id, r, r'](\id', \id'', *)$ return $r$ if $\id \notin \{ \id' , \id'' \}$ and $r'$ otherwise. We will also include $r$ in the clear in $\psi_2$. Now the receiver can check decryption along which path (if any) yields $r$; in which case, the receiver can determine the intersection identity. To argue security, if we use anonymous garbled circuits~\cite{EC:BLSV18}, then we can argue if $\id \notin S_\Rs$, then $\psi_2$ is pseudorandom to the receiver. Arguing this formally (especially for the general case) is non-trivial, requiring a delicate formulation of hybrids.
+
+\paragraph{Receiver's security?} The receiver's hash  $\hr$ is computed deterministically from $S_\Rs$, so it cannot be secure. But this is easy to fix: On the leaf level we append the identities with random values and only then will  perform the Merkle hash.
+
+\subsection{Reusable Laconic PSI}
+
+We now outline our techniques for obtaining   laconic PSI in a black-box way, for both semi-honest and malicious cases.
+
+\paragraph{A semi-honestly secure protocol}
+Our starting point is a recent construction of a \emph{one-way function with encryption} from the $\phi$-hiding assumption due to Goyal, Vusirikala and Waters~\cite{C:GoyVusWat20}, and we remark that similar \emph{accumulator-style} ideas were used before to construct PSI~\cite{PKC:AteDeCTsu11}. Since the protocol of~\cite{C:GoyVusWat20} is ``almost'' a PSI protocol, we will directly describe the underlying semi-honestly secure PSI based. Assume for a moment that both the receiver's input $S_\Rs$ and the sender's input $S_\Ss$ are subsets of a polynomially-sized universe $\mathcal{U} = \{1,\dots,\ell\}$. We will later remove this size restriction on $\mathcal{U}$. We have a common reference string $\crs$ which is composed of an RSA modulus $N = PQ$, a uniformly random generator $g \in \mathbb{Z}_N^\ast$ and pairwise distinct primes $p_1,\dots,p_\ell$. 
+
+For the sake of simplicity, we will assume in this outline that the sender's input set $S_\Ss$ is a singleton set $\{ w \} \subseteq \mathcal{U}$. The actual protocol will be obtained by running the protocol we will now sketch for every element in the sender's input set. The protocol commences as follows: The receiver first \emph{hashes} its input set into
+\[
+h=g^{r\prod_{i \in S_\Rs} p_i} \mod N,
+\]
+where $r$ is chosen a uniformly chosen random from $[N]$ (and thus $r \smod \phi(N)$ is statistically close to uniform). The receiver then sends $h$ to the sender.
+
+The sender, whose input is $S_\Ss = \{ w \}$, chooses a uniformly random value $\rho \pick [N]$ and a uniformly random seed $s$ for a suitable randomness extractor $\Ext$, and computes the values $f \gets g^{\rho p_w}$ and $R \gets \Ext(s,h^\rho)$. It sends $s$, $f$ and $R$ to the receiver.
+
+The receiver, upon receiving $f$ and $R$, will check for all elements $i \in S_\Rs$ whether it holds that $R_i \stackrel{?}{=} R$, for $R_i \gets \Ext(s,f^{r \cdot \prod_{j \in S_\Rs \setminus \{ i \} } p_j})$. If it finds such an $i$, it outputs $\{ i \}$ as the intersection of $S_\Rs$ and $S_\Ss$. Correctness of this protocol follows routinely\footnote{We will not further discuss the small correctness-error of this protocol as our final protocol will not suffer from this defect}. by noting that if $w \in S_\Rs$ then $$f^{r \cdot \prod_{j \in S_\Rs \setminus \{ w \} } p_j} = g^{\rho \cdot r \cdot \prod_{j \in S_\Rs} p_j } = h^\rho.$$ Also, note that this scheme is laconic, as the size of the messages exchanged by the parties is independent of the size of the set $S_\Rs$.
+
+Arguing security against a semi-honest sender is also routine, as $h$ is in fact statistically close to a uniformly random group element in $\ZZ_N^\ast$. Proving security against a semi-honest receiver is a bit more involved and proceeds via the following hybrid modifications. Let $S_\Ss = \{ w \}$ be the sender's input such that $w \notin S_\Rs$. In the first hybrid, we will choose the modulus $N$ such that $p_w$ divides $\phi(N)$; under the $\phi$-hiding assumption, this change will go unnoticed. Now, via a standard lossiness-argument, we have that $f = g^{\rho p_w}$ loses information about $g^\rho$, i.e., $g^\rho$ has high min-entropy given $f$. This means that $h^\rho = g^{\rho r \cdot \prod_{i \in S_\Rs} p_i}$ has also high min-entropy as $w \notin S_\Rs$ and thus $p_w$ does not divide $r \cdot \prod_{i \in S_\Rs} p_i$ (w.o.p). Consequently, as $h^\rho$ has high min-entropy conditioned on $f$, in the next hybrid change we can replace $R = \Ext(s,h^\rho)$ with a uniformly random value, incurring only a negligible statistical distance via the extraction property of $\Ext$. In the next hybrid change, we can switch the modulus $N$ back to normal mode, i.e., such that $p_w$ does not divide $\phi(N)$. But now $f = g^{\rho p_w}$ is statistically close to uniform in $\ZZ_N^\ast$. Thus, in the last hybrid change, we can replace $f$ with a uniformly random value in $\ZZ_N^\ast$ and get that the view of the receiver is independent of $w$, as required.
+
+For the case that the sender's input $S_\Ss$ contains more than a single element, we mount a hybrid argument repeating the above modifications for each element of $S_\Ss$, not in the receiver's set $S_\Rs$.
+
+\paragraph{Large universes}
+The above protocol has the drawback that the size of the common reference string $\crs$ depends linearly on the size of the universe $\mathcal{U}$, which is highly undesirable. There is a standard way of overcoming this issue: Instead of explicitly listing all the primes $p_i$ in $\crs$, we will describe them implicitly via a pseudorandom function (PRF).\footnote{We remark that we use a PRF, not because we want uniform outputs, but to implicitly define the set of primes. A similar trick was used in \cite{C:BoyGilIsh16}.} For this purpose, we need a PRF which maps into the set of primes of a certain size. This can e.g. be achieved by using rejection sampling: we first sample $y\leftarrow F_k(x|i)$ (starting with $i=1$) and check if $y$ is a prime number. If it is, we output $y$; else, we increment $i$ until a prime is hit. Under standard number-theoretic assumptions, this process finds a prime after a logarithmic number of steps. One small issue is that, in the above security proof, we need to replace one of the primes with a prime provided by the $\phi$-hiding experiment. We resolve this issue by making the PRF programmable in one point, e.g., by setting $F_{k,k'}(x|i) = F_k'(x|i) \oplus k_i$ for a PRF $F'$, $k'=(k_1,\dots,k_\xi)$ and a suitable choice of $\xi$.
+
+\paragraph{A first attempt at malicious sender security}
+Our protocol thus far, however, offers no security against a malicious sender. The main issue is that a corrupted sender may choose the values $f$ and $R$ arbitrarily, and further, there is no mechanism for a simulator against a malicious sender to extract the senders input $w$. Of course, this protocol can be made secure against malicious senders by letting the sender prove via a general-purpose NIZK proof that it follows the semi-honest protocol correctly. This however would necessitate making a non-black-box use of our semi-honest laconic PSI protocol, contrary to our goal of achieving a fully black-box protocol.
+
+Re-inspecting the above protocol, we have not made full use of the fact that the extracted string $R$ is uniformly random. Our first idea to make the sender extractable is to make better use of $R$. Instead of sending $R$ in the plain, we will use $R$ as random coins for a public key encryption (PKE) scheme to encrypt the sender's input $w$. More concretely, we will modify the above protocol as follows. We include a public key $\pk$ of a PKE scheme in the common reference string $\crs$ and, instead of having the sender include $R$ in the plain in its message to the receiver, it will include a ciphertext $\ct \gets \Enc(\pk,i;R)$. We also need to modify the procedure of the receiver. The receiver will recover $R_i$ as before, but will now use $R_i$ to \emph{re-encrypt} the index $i$, that is, for each $i \in S_\Rs$ it will compute $\ct_i \gets \Enc(\pk,i;R_i)$.
+
+First notice that, as a side bonus, this modification makes our laconic PSI scheme perfectly correct, given that the PKE scheme is perfectly correct, as now $\ct_i$ uniquely specifies the element $i$.
+
+In terms of security, we first observe that this modification does not harm security against a semi-honest receiver given that the PKE scheme is IND-CPA secure. In the above sketch of a security proof, we have argued that, if $w$ is not in the set $S_\Rs$, then  $R$ is uniformly random from the view of the receiver. This means now that $\ct$ is a freshly encrypted ciphertext, using fresh random coins (independent of $\rho$). Moreover, we can use IND-CPA security of the PKE to replace $\ct$ with encryption of $0$, and then continue as above to argue security against a semi-honest receiver. 
+
+To establish security against a malicious sender, we would like to argue as follows. The simulator can now generate the public key $\pk$ in $\crs$ together with a secret key $\sk$. Given a message $(s,f,\ct)$ by a malicious sender, the simulator can recover the set element $w$ by decrypting the ciphertext $\ct$ using $\sk$. At a first glance, this seems to provide us with security against malicious senders. And indeed, the simulator will recover all elements for which the receiver would have declared to be in the intersection. There is a grave issue, however: The simulator has no means of detecting whether the honest receiver would actually have succeeded in re-encrypting the index $i$. In other words, the malicious sender can make the simulator \emph{false positives}, such that the simulator declares an element $i$ to be in the intersection, whereas an honest receiver would not have.
+
+\paragraph{Switch groups, extract everything!}
+
+We briefly recall some facts about the Damg\aa rd-Jurik cryptosystem~\cite{PKC:DamJur01}. The group $\ZZ_{N^{\xi + 1}}^\ast$ contains a cyclic subgroup $\mathbb{NR}_N$ of order $\phi(N)$\footnote{Note that $\mathbb{NR}_N$ is not a cyclic group and we only assume this here for simplicity. Actually, if we choose $N$ as a product of two safe primes, then we could find a cyclic subgroup $\mathbb{J}_N$ which is the group of elements with Jacobi symbol $1$, and its subgroup $\mathbb{T}_N$ composing of $N^\xi$-th powers of $\mathbb{J}_N$ has order $\phi(N)/2$. Namely, just replace the group pair $(\ZZ^\ast_{N^{\xi+1}},\mathbb{NR}_N)$ with $(\mathbb{J}_N, \mathbb{T}_N)$ to fix this issue. Please refer to Section \ref{sec:hardnessassum} and Section \ref{sec:lpsi}  for details.}. Now let $g_0 \in \mathbb{NR}_N$ be a generator of $\mathbb{NR}_N$. Then we can generate the entire group $\ZZ_{N^{\xi + 1}}^\ast$ by $g_0$ and $1 + N$, i.e. we can write every $h \in \ZZ_{N^{\xi + 1}}^\ast$ as $h = g_0^t \cdot (1 + N)^m$ for some $t \in \ZZ_{\phi(N)}$ and $m \in \ZZ_{N^\xi}$. Furthermore, we can efficiently compute discrete logarithms relative to $1 + N$, i.e. if $h = (1 + N)^m$ for an $m \in \ZZ_{N^\xi}$, then we can efficiently compute $m$ from $h$. Finally, the decisional composite residue (DCR) assumption in $\ZZ_{N^{\xi + 1}}^\ast$ states that a random element in $\mathbb{NR}_N$ is indistinguishable from a random element in $\ZZ_{N^{\xi + 1}}^\ast$. It follows that $g_1 = g_0^{t_1}$ and $g_2 = g_0^{t_2} \cdot (1 + N)$ (for uniformly random $t_1,t_2 \pick \ZZ_{\phi(N)}$) are computationally indistinguishable. Moreover, if $h = g_2^{t}$ for a $t < N^{\xi-1}$, we can efficiently compute $t$  from $h$ using $\phi(N)$ as a trapdoor by first computing
+\[
+h^{\phi(N)} = g_2^{t \cdot \phi(N)} = \underbrace{g_0^{t \phi(N)}}_{= 1} \cdot (1 + N)^{t \cdot \phi(N)} = (1 + N)^{t \cdot \phi(N)} \mod N^{\xi+1},
+\]
+from which we can efficiently compute $t \cdot \phi(N)$ (as $t \cdot \phi(N) < N^{\xi}$) and thus $t$.
+
+Given this, we will now make the following additional modification to our PSI protocol. Instead of choosing the element $g$ in the common reference string $\crs$ to be a random generator of $\ZZ_N^\ast$, we choose $g$ to be a random generator of $\mathbb{NR}_N$, where $\mathbb{NR}_N$ is the subgroup of order $\phi(N)$ in $\ZZ_{N^{\xi + 1}}^\ast$ (for a sufficiently large but constant $\xi$). Our first observation is  that this does not affect the security proof in the case of a semi-honest receiver, since $\mathbb{NR}_N$ is still a cyclic group of order $\phi(N)$ and the above argument using the $\phi$-hiding assumption works analogously in this group.
+
+Assume for a moment we had a mechanism which ensures that the group element $f$ in the sender's message is of the form $f = g^a$ for an $a < N^{\xi - 1}$. We can then argue security against a malicious sender as follows: First, we make a hybrid change and choose the element $g$ in the common reference string like $g_2$ above, i.e. we choose $g = g_0^t (1 + N)$; under the DCR assumption, this change goes unnoticed. Now, given that $f = g^a$ for an $a < N^{\xi - 1}$ and using $\phi(N)$ as a trapdoor, the simulator can efficiently compute $a$ from $f$ as described above. Since it can also recover the index $w$ from the ciphertext $\ct$ as described above, it can now check if $a$ is of the form $a = \rho \cdot p_w$. If so, it recovers $\rho$ and performs the same re-encryption test for $\ct$ which the real receiver would perform. This makes the simulation indistinguishable from the real experiment.
+
+
+
+\subsection{DV-NIZK Range Proofs for DJ Ciphertexts}
+The final component which is missing to make the above argument succeed is a mechanism which ensures that the group element $f$ is true of the form $f = g^a$ for a \emph{small} $a$. For the sake of generality, we will make the following discussion for general DJ-ciphertexts, that is, ciphertexts of the form $c = h^t \cdot (1 + N)^a$ (where $h = g_1^z$ is the public key). If we can show that such a ciphertext encrypts a small value $a$, proving that $f = g^a$ and $c = h^t \cdot (1 + N)^a$ for the same $a$ can be efficiently proven via a standard hash-proof system (HPS) \cite{EC:CraSho02}.
+
+First, we observe that, to show that $c = h^t \cdot (1 + N)^a$ encrypts a value $a < 2^k$ for some parameter $k$, it suffices to prove that some ciphertexts $c_0,\dots,c_{k-1}$ encrypt \emph{bits} $b_1,\dots,b_{k-1}$. Assume for now we had a DV-NIZK protocol $\Pi$ to prove that the ciphertexts $c_0,\dots,c_{k-1}$ all just encrypt bits. The prover can convince the verifier as follows $c$ encrypts a value $a < 2^k$. First the prover encrypts bit $b_i$ in a ciphertext $c_i$ and sets $c' = \prod_{i = 0}^{k-1} c_i^{2^i}$ (it is not hard to see that $c'$ encrypts $a$). Now, the prover uses $\Pi$ to convince the verifier that $c_0,\dots,c_{k-1}$ indeed encrypt bits. Furthermore, it can use a standard HPS to prove that $c$ and $c'$ indeed encrypt the same value. Zero-knowledge follows routinely. To see that this protocol is sound, observe that if the $c_i$ indeed encrypt bits, then $c'$ must encrypt a value bounded by $2^k$.
+
+\paragraph{A DV-NIZK proof system for ciphertext equality across different encryption schemes}
+
+Alas, we do not know of a black-box DV-NIZK which proves that DJ ciphertexts encrypt bits. However, for the pairing-based Boneh-Goh-Nissim (BGN) cryptosystem~\cite{TCC:BonGohNis05}, such a proof system was constructed by Groth, Ostrovsky and Sahai~\cite{EC:GroOstSah06}. Consequently, if we could prove in a black box way that a BGN ciphertext encrypts the same value as a DJ ciphertext we would be done.
+
+Recall that, in the BGN cryptosystem, public keys are of the form $(G,H)$, where $G$ and $H$ generators of subgroups of a composite-order pairing group $\GG$. BGN ciphertexts are of the form $C=G^{m}H^r$, where $m$ is the encrypted message and $r$ are random coins.
+
+Our final contribution is a DV-NIZK proof system which allows us to prove that a DJ ciphertext and a BGN ciphertext encrypt the same value.
+
+To simplify the description of our prove system, assume we have BGN public keys $(G,H_1),\dots,(G,H_\ell)$, i.e. each key sharing the same $G$ but having fresh and random $H_i$, and an element $H_0$. Furthermore, assume that we have DJ public keys $h_1,\dots,h_\ell$, and an element $h_0$. We will assume that both sequences of keys are in a public setup, together with the elements $H_0,h_0$.
+
+Suppose further that we have BGN ciphertexts $C_1,\dots, C_\ell$, where $C_i = G^{m_i} H_i^r$, i.e., all ciphertexts use the same random coins $r$ but encrypt possibly different bits $m_i$.\footnote{Via a standard rerandomization argument we can show that reusing the same random coins across different keys does not harm CPA security.} As mentioned above, using the NIZK scheme from \cite{EC:GroOstSah06}, we can prove that the ciphertexts $C_i = G^{m_i} H_i^{r}$ are indeed well-formed and that $m_i\in\bin$. Moreover, we have $C_0=H_0^r$, which can be proven well-formed using a standard hash proof system (HPS) \cite{EC:CraSho02}.
+
+Assume further that we are given  DJ ciphertexts $c_1,\dots,c_\ell$, where $c_i = h_i^t \cdot (1 + N)^{m'_i}$, i.e., again the ciphertexts share the same random coins $t$.\footnote{Same as above.} Moreover, assume that we have a value $h_0^r$ exactly as above. We want to prove that it holds for all $i \in [\ell]$ that $m_i = m'_i$. Our DV-NIZK proof system for equality of BGN and DJ ciphertexts now proceeds roughly as follows:
+\begin{itemize}
+    \item The verifier starts by sampling a uniformly random binary string $\sigma\sample \bin^\ell$ and computes $F=H_0^A\prod H_i^{\sigma_i} \in \GG$ and $f=h_0^\alpha\prod h_i^{\sigma_i} \in Z_{N^{\xi + 1}}^\ast$, for uniformly random values $A,\alpha$. It sends $\crs=(F,f)$ to the prover and keeps $\sigma$ as the designated verifier key.
+    \item The prover is given ciphertexts $C_1,\dots,C_\ell$ and $c_1,\dots,c_\ell$ with $C_i=G^{m^i}H_i^r$ and $c_i=h_i^t(1+N)^{m_i}$, and the values $C_0=H_0^r$ and $c_0=h_0^t$. It computes $K=F^rG^\tau$ and $k=f^t(1+N)^\tau$ where $\tau$ is sampled according to a distribution which is wide enough to drown the $m_i$, but short enough such that it is bounded by $N$. The proof $\pi$ is consists of $(K,k)$.
+    \item The verifier, given the proof $\pi = (K,k)$, computes the discrete log $y$ (in base $(1+N)$) of $k^{-1}c_0^\alpha\prod_{i=1}^\ell c_i^{\sigma_i}$ and checks if $G^y=K^{-1}C_0^A\prod_{i=1}^\ell C_i^{\sigma_i}$.
+\end{itemize}
+ 
+For completeness, note that
+\begin{align*}
+    k^{-1}c_0^\alpha\prod c_i^{\sigma_i} & = \left (h_0^\alpha\prod h_i^{\sigma_i}\right)^{-t} (1+N)^{-\tau}\left(h_0^{t}\right)^\alpha\prod \left(h_i^t(1+N)^{m_i}\right)^{\sigma_i} \\ &=(1+N)^{\sum \sigma_im_i-\tau},
+\end{align*}
+
+from which the verifier can recover $y=\sum \sigma_i m_i-\tau$. Moreover
+\[
+L=K^{-1}C_0^A\prod C_i^{\sigma_i}= \left(H_0^A\prod H_i^{\sigma_i}\right)^{-r} G^{-\tau}\left(H_0^{r}\right)^A \prod (H_i^rG^{m_i})^{\sigma_i}=G^{\sum \sigma_i m_i-\tau}
+\]
+and thus $G^y=L$.
+ 
+The zero-knowledge property can be established by noting that the term $\tau$ statistically drowns $\sum_i \sigma_i m_i$. 
+
+We argue as follows to prove \emph{reusable statistical soundness} (or simulation soundness). First note that $\sigma$ is statistically hidden, given  $F=H_0^A\prod H_i^{\sigma_i}$ and $f=h_0^\alpha\prod h_i^{\sigma_i}$, by the uniform values $A,\alpha$. We need to show that if there is an index $i$ for which $m_i \neq m'_i$, then the verifier will reject with high probability, irrespective of the (adversarial) choices of $\tau,\tau'$ (which are not necessarily short)\footnote{We assume that the verifier rejects if it fails to compute the discrete logarithm of $k^{-1}\prod d_i^{\sigma_i}$.}. It follows from the above description that the verifier accepts proof of the condition
+\[
+\sum \sigma_{i,j} m_i - \tau_j \mod n=\left( \sum \sigma_{i,j}m_i' -\tau'_j \smod N^{\xi} \right)\smod n
+\]
+is satisfied, where $n$ is the order of the subgroup of $\GG$ generated by $G$. In the main body we will show that, given that $n > N^{\xi}$, this condition will be violated with probability $\approx 1/2$ if there exists an index $i$ for which $m_i \neq m'_i$. By repeating the protocol $\lambda$ times, we achieve negligible soundness error.
+
+
+\subsection{Labeled Laconic PSI and Laconic OT}
+Our laconic PSI construction  can be easily extended into a labelled laconic PSI, in which the receiver also learns labels associated with set elements in the intersection. To achieve this, we simply use an extractor with an output size twice as large: the first half is used as above to perform the re-encryption step; the other half is used as a one-time pad to encrypt the corresponding label. It is easy to see that the receiver can only recover the labels for the elements within the intersection since the security proof follows the same blueprint as before.
+
+We also build a LOT using the same ideas as above. The receiver commits to a database $D\in\{0,1\}^\Gamma$ by computing $h=g_0^{r\prod_{i=1}^\Gamma e_{i, D_i}}\mod N^{\xi+1}$, where each prime $e_{i,b}$ is the output of a PRF (just as before). The sender computes $f_j=g_0^{\rho_j e_{L,j}}, F_j=g_1^{\rho_j e_{L,j}}(1+N)^{\rho_j e_{L,j}}$ for each $j\in\{0,1\}$, together with a range proof. Moreover, he encrypts each message as $\ct_j=k_j\oplus m_j$ where $k_j\leftarrow\mathsf{Ext}(s_j, h^{\rho_j})$. Again, security follows the same reasoning as above. Our LOT protocol is the first one to provide security against a malicious sender while incurring communication complexity independent of the size of $D$.
+
+
+\section{Definitions}
+\noindent \emph{Laconic Private Set Intersection.} An $\ell$PSI is a two-round protocol that implements a PSI functionality  and has special compactness properties.
+
+\begin{definition}
+A $\ell$PSI scheme $\mathsf{LPSI}=(\mathsf{GenCRS},\mathsf{R}_1,\Ss,\Rs_2)$ is defined as follows:
+\begin{itemize}
+    \item $\mathsf{GenCRS}(1^\lambda)$: Takes as input a security parameter $1^\lambda$, and outputs  a common reference string $\crs$.
+    \item $\Rs_1(\crs,S_R)$: Takes as input a $\crs$ and a set $S_R$. It outputs a first PSI message $\psi_1$ and a state $\st$.
+\item $\Ss(\crs,S_S,\psi_1)$: Takes as input a $\crs$, a set $S_S$ and a first PSI message $\psi_1$. It outputs a second PSI message $\psi_2$.
+\item $\Rs_2(\crs,\st,\psi_2)$: Takes as input a $\crs$, a state $\st$ and a  second message $\psi_2$. It outputs a set $\Ic$.
+\end{itemize}
+We require the following properties.
+\begin{itemize}
+    \item \textbf{Correctness}: The protocol satisfies PSI correctness in the standard sense.
+    \item \textbf{Efficiency Requirements.} There exists a fixed polynomial $\poly[]$ such that   the length of $\psi_1$  and  the running time of  $\Ss$ are at most  $\poly[\lambda,  \log |S_R|]$.
+\end{itemize}
+\end{definition}
+
+For malicious security, we work in the standard UC-framework~\cite{FOCS:Canetti01} that allows us to prove the security of protocols under arbitrary composition with other protocols.
+% ALREADY DEFINED ABOVE
+% Let $\Fc$ be a functionality, $\pi$ a protocol that implements $\Fc$ and  $\Ec$ be an environment, an entity that oversees the execution of the protocol in both the real and the ideal worlds. Let $\IDEAL_{\Fc,\Sim,\Ec}$ be a random variable that represents the output of $\Ec$ after the execution of $\Fc$ with adversary $\Sim$. Similarly, let $\REAL_{\pi,\Ac,\Ec}^{\Gc}$  be a random variable that represents the output of $\Ec$ after the execution of $\pi$ with adversary $\Ac$ and with access to the functionality $\Gc$.
+
+% \begin{definition}
+% \label{def:ucsecurity}
+% A protocol $\pi$ \emph{UC-realizes $\Fc$ in the $\Gc$-hybrid model} if for every PPT adversary $\Ac$ there is a PPT simulator $\Sim$ such that for all PPT environments $\Ec$, the distributions $\IDEAL_{\Fc,\Sim,\Ec}$ and $ \REAL_{\pi,\Ac,\Ec}^{\Gc}$ are computationally indistinguishable.
+% \end{definition}
+
+We present the (reusable) PSI ideal functionality.
+\paragraph{Reusable PSI functionality.}  The functionality $\Fc_{\mathsf{rPSI}}$ is parametrized by a universe $\Uc$ and works as follows:
+\begin{itemize}
+    \item \textbf{Setup phase.} $\Rs$ sends $(\sid,S_\Rs)$ to  $\Fc_{\mathsf{rPSI}}$ where $S_\Rs\subseteq \Uc$. It ignores future messages from $\Rs$ with the same $\sid$.
+
+  \item \textbf{Send phase.}
+      $\Ss$ sends $\left (\sid,i,S_\Ss\subseteq\Uc \right )$ to $\Fc_{\mathsf{rPSI}}$. $\Fc_{\mathsf{rPSI}}$ sends $(\sid,i,S_\Rs\cap S_\Ss)$ to $\Rs$. It  ignores future messages from $\Ss$ with the same $\sid$ and $i\in\NN$.
+\end{itemize}
+
+
+
+
+
+
+\section{Semi-Honest Laconic Private Set Intersection from CDH/LWE}
+\label{sec:LPSIfromCDH}
+In this section, we show how to realize semi-honest \ePSI~from CDH/LWE. Our construction is non-black-box, making use of garbled circuits. This leads to the first feasibility result based on CDH, and an alternative LWE construction to that of~\cite{FOCS:QuaWeeWic18}.
+
+Our construction makes use of hash encryption schemes in conjunction with garbled circuits, which we review below. 
+
+
+\begin{definition}[Hash Encryption~\cite{C:DotGar17,EC:BLSV18}]
+A hash encryption scheme $\HE = (\HGen, \Hash, \HEnc, \HDec)$ is defined as follows.
+\begin{itemize}
+    \item $\HGen(1^\secpar , n)$: Takes as input a security parameter $1^\secpar$ and an input size $n$ and outputs a hash key $\pp$.
+    \item $\Hash(\pp, z)$: Takes as input a hash key $\pp$ and $z \in \bits^n$, and deterministically outputs $h \in \bits^\secpar$. 
+    \item $\HEnc(\pp, h, \{m_{i,b} \}_{i \in [n], b \in \bits} ; \{r_{i,b} \})$: Takes as input  a hash key $\pp$, a hash output $h$,  messages $\{ m_{i,b}\}$ and randomness $\{r_{i,b} \}$,  and outputs $\{ \cth_{i,b}\}_{i \in [n], b \in \bits}$. We write it shortly as $\{ \cth_{i,b}\}$. Overloading notation, each ciphertext $\cth_{i,b}$ is computed as $\cth_{i,b} = \HEnc(\pp, h , m_{i,b} , (i,b); r_{i,b})$.
+    \item $\HDec(z, \{ \cth_{i,b} \})$: Takes as input a hash input $z$ and $\{\cth_{i,b} \}$ and outputs $n$ messages $(m_1, \dots, m_n)$.
+\end{itemize}
+We require correctness meaning that  for the variables above,  $(m_1, \dots , m_n) = (m_{1, z[1]} , \dots , m_{n , z[n]})$. We define two notions of security.
+\begin{itemize}
+    \item \textbf{Semantic Security}: Given  $z \in \bits^n$, no adversary can distinguish between encryptions of messages  made to indices $(i, \bar{z_{i}})$. For any PPT $\mc{A}$, sampling $\pp \pick \HGen(1^\secpar , n)$, if $(z , \{m_{i,b}\} , \{m'_{i,b} \}) \pick \mc{A}(\pp)$ and if $m_{i, z[i]} = m'_{i, z[i]}$ for all $i \in [n]$, then $\mc{A}$ cannot distinguish between $\HEnc(\pp, h, \{m_{i,b} \})$ and $\HEnc(\pp, y, \{m'_{i,b} \})$, where $h := \Hash(\pp, z)$.
+    \item \textbf{Anonymous Semantic Security}: For a random $\{ m_{i,b}\}$ with equal rows (i.e., $m_{i,0} = m_{i, 1}$), the output of  $\HEnc(\pp, h, \{m_{i,b}\})$ is pseudorandom even in the presence of the hash input. Formally, for any $z \in \bits^n$,  sampling $\pp \pick \HGen(1^\secpar, n)$, $h:= \Hash(\pp, z)$, and sampling $\{m_{i,b}\}$ uniformly at random with the same rows, then $\bo{v} := (\pp, z, \HEnc(\pp, h, \{m_{i,b}\}) )$ is indistinguishable from another tuple in which we replace the hash-encryption component of $\bo{v}$ with a  random string.
+\end{itemize}
+\end{definition}
+
+We have the following results from~\cite{EC:BLSV18,EC:GarGayHaj19}.
+
+\begin{lemma}\label{Lemma:BLSVAnonHash}
+Assuming CDH/LWE there exists anonymous hash encryption schemes, where $n = 3\secpar$ (i.e.,  $\Hash(\pp, \cdot) \colon \bits^{3 \secpar} \mapsto \bits^\secpar$).\footnote{We note that  the CDH construction of~\cite{EC:BLSV18} satisfies a weaker notion of anonymity, in which only some part of the ciphertext is pseudorandom. But for ease of presentation we keep the notion as is, and remark that  our \ePSI~construction works also with respect to that weaker notion.} Moreover, the hash function $\Hash$ satisfies robustness in the following sense: for any input distribution on $z$ which samples at least $2 \secpar $ bits of $z$ uniformly at random, $(\pp, \Hash(\pp, z)) $ and $ (\pp, u)$ are statistically close, where $\pp \pick \HGen(1^\secpar,  3 \secpar)$ and $u \pick \bits^\secpar$.
+\end{lemma}
+
+
+
+We also review the notion of garbled circuits and the anonymous property, as defined in~\cite{EC:BLSV18}.
+
+\begin{definition}[Garbled Circuits]
+A garbling scheme for a class of circuits $\{ \al{C} \colon \bits^n \mapsto \bits^m \}$ consists of $(\Garb,\Eval, \Sim)$ satisfying the following.
+\begin{itemize}
+    \item \textbf{Correctness}: for all $\al{C} \in \mc{C}$, $\msg \in \bits^n$, $\Pr[\Eval(\tilde{\al{C}}, \{ \lb_{i , \msg[i]} \}) = \al{C}(\msg)] = 1$, where  $(\wt{\al{C}} , \{ \lb_{i,b} \}) \pick \Garb(1^\secpar,\al{C})$.
+    \item \textbf{Simulation Security}: For any $\al{C} \in \mc{C}$ and $\msg \in \bits^n$: $(\tilde{\al{C}}, \{ \lb_{i , \msg[i]} \}) \comp \Sim(1^\secpar, \al{C}(\msg))$, where $(\wt{\al{C}} , \{ \lb_{i,b} \}) \pick \Garb(1^\secpar,\al{C})$.
+    \item \textbf{Anonymous Security}~\cite{EC:BLSV18}: For any $\al{C} \in \mc{C}$, choosing $y \pick \bits^m$,  the output of $\Sim(1^\secpar, y)$ is pseudorandom.
+\end{itemize}
+\end{definition}
+
+
+
+
+\begin{lemma}[\cite{EC:BLSV18}]\label{Lemma:BLSVGC}
+Anonymous garbled circuits can be built from  one-way functions (OWFs).
+\end{lemma}
+
+
+
+\paragraph{Notation on Hash Encryption.}  Throughout this section we assume $\Hash(\pp, \cdot) \colon \bits^{n} \mapsto \bits^\secpar$, where $n = 3 \secpar$.  We use $\{\lb_{i,b} \}$ to define a sequence of pairs of labels, where (throughout this section) $i \in [n]$  and $b \in \bits$.  For $\bo{r} := \{r_{i,b} \}$ we let $\HEnc(\pp, h, \{\lb_{i,b} \} ; \bo{r})$  denote the  ciphertexts $\{\cth_{i,b} \}$, where $\cth_{i,b} = \HEnc(\pp, h, \lb_{i,b} , (i,b); r_{i,b})$. 
+ We further overload the  notation as follows. We use $\{ \lb_i \}$ to denote a sequence of $3 \secpar$ elements. For  $\bo{r} := \{r_{i,b} \}$ we let $\HEnc(\pp, h, \{\lb_{i} \} ; \bo{r})$  denote a hash encryption where both plaintext rows are $\{\lb_i\}$; namely,    the  ciphertexts $\{\cth_{i,b} \}$, where $\cth_{i,b} = \HEnc(\pp, h, \{ m_{i,b}\}; r_{i,b})$, where $m_{i,0} = m_{i,1} = \lb_i$, for all $i$. %That is, we set both rows of the plaintext matrix to be $\{\lb_i \}$.
+
+\paragraph{Tree Terminology.} Throughout this section we work with full binary trees. The depth of a tree is the length of a root-leaf path. We call the leaf level  0, the level above it level one, and so on. We order the root-leaf paths from left to right; namely, the path from the root to the leftmost leaf node is the first root-leaf path, and the path from the root to the rightmost leaf node is the $2^d$th root-leaf path, where $d$ is the depth. Each node has an associated hash value, computed based on values associated with its children. Thus, when representing a root-leaf path, we  include both children of each branching intermediate node.
+
+\paragraph{Sender's Set Size is One.} We assume without loss of generality that the sender holds a single element. For the general case where the sender may have multiple elements, we reuse the first message of the receiver for each element in the sender's set. The overall running time of the sender will only scale with its own set size, and not with the receiver's set size. 
+
+  
+  
+  
+\begin{table}[t!]
+\centering
+\begin{tabular}{| l | l |}
+	\hline 			
+	\begin{minipage}[t]{0.50\textwidth}
+	\vspace{-5pt} 
+	{\bf Circuit $\al{F}[ \id,  r , r'](\id', x , x')$:} \\
+		\rule[6pt]{\textwidth}{1pt}
+\begin{itemize}
+    \item \textbf{Hardwired:} target identity $\id$ and  randomness values  $r$ and $r'$.
+    \item \textbf{Operation:} Return
+    
+    
+    $y :=
+		    \begin{cases}   
+                r & \id = \id'  \\
+                r' & \text{else}
+		    \end{cases}
+		$
+\end{itemize}
+	\end{minipage}
+	&
+	\begin{minipage}[t]{0.50\textwidth}
+	\vspace{-5pt} 
+	{\bf Circuit $\al{V}[\pp , \id, \{\lb_{i,b}\},  \bo{r}](h_1, h_2 , \id')$:} \\
+		\rule[6pt]{\textwidth}{1pt}
+\begin{itemize}
+    \item \textbf{Hardwired:}  Hash public parameter $\pp$,  target identity $\id$, labels $\{\lb_{i,b}\}$, randomness $\bo{r}$.
+    \item \textbf{Operation:} Return
+    
+    
+    $\ct :=
+		    \begin{cases}   
+                \HEnc(\pp,h_1 , \{\lb_{i,b} \};\bo{r}) & \id \leq \id' \\
+                \HEnc(\pp,h_2 , \{\lb_{i,b} \};\bo{r}) & \text{else}
+		    \end{cases}
+		$
+\end{itemize}
+	\end{minipage}
+	\end{tabular}
+\vspace{3pt}
+
+\begin{tabular}{| l |}
+	\hline 			
+	\begin{minipage}[t]{1.01\textwidth}
+	\vspace{-5pt} 
+	{\bf Procedure $\DecPath(\pth , \mathsf{psi}_2 )$:} \\
+		\rule[6pt]{\textwidth}{1pt}
+\begin{itemize}
+    \item \textbf{Input:} A leaf-root Path $\pth$ and  ciphertext $\psi_2 :=  (\wt{\al{C}}_0, \dots , \wt{\al{C}}_{d} , \{\cth_{i,b}^{(d)} \})$.
+    \item \textbf{Operation:} Parse $\pth :=  ((\underbrace{\id , x , x'}_{z_0}) , (\underbrace{h_0 , h'_0, \id_0}_{z_1}) ,    \dots , (\underbrace{h_{d-1} , h'_{d-1}, \id_{d-1}}_{z_{d}}) , \hr)$. For $w \in \{d, \dots , 1\}$: % Let $\{\lb_{i,b}^{(w-1)}\} := $
+    \begin{enumerate}
+        \item Let $\{\lb_{i}^{(w)}\} := \HDec(\mathsf{z}_{w} , \{\cth_{i,b}^{(w)} \} ) $.
+        \item Set $\{\cth_{i,b}^{(w-1)} \} := \Eval(\wt{\al{C}}_{w} ,  \{\lb_{i}^{(w)} \})$.
+    \end{enumerate}%Parse $\pth :=  (\id , x , (h^{(0)} , h'^{(0)}, \id^{(0)}) ,    \dots , (h^{[d-1]} , h'^{[d-1]}, \id^{[d-1]}) , \hr$
+    
+    
+   Let $\{\lb_{i}^{(0)}\} := \HDec(z_0 , \{\cth_{i,b}^{(0)} \} ) $.  Return $\Eval(\wt{\al{C}}_{0} ,  \{\lb_{i}^{(0)} \})$. 
+    \end{itemize}
+	\end{minipage}
+	\end{tabular}
+\vspace{3pt}
+\caption{Circuits $\al{F}, \al{V}$ and procedure $\DecPath$}
+\label{table:hybrids-SE-CPA}
+\end{table}
+  
+  
+
+\begin{construction}[\ePSI~Construction]\label{Const:LPSIGarb}
+   We require the following ingredients in our \ePSI~Construction. % (Construction~\ref{Const:LPSIGarb}).
+\begin{enumerate}
+    \item A  hash encryption scheme $\HE = (\HGen, \Hash, \HEnc, \HDec)$, where $\Hash(\pp, \cdot) \colon \bits^{3 \secpar} \mapsto \bits^\secpar$. % maps $3 \secpar$ bits to $\secpar$ bits.
+    \item A garbling scheme $\GS = (\Garb, \Eval, \Sim)$. % for $\Enc$.
+    \item Circuits $\al{F}$ and $\al{V}$, as well as procedure $\DecPath$, defined in Table~\ref{table:hybrids-SE-CPA}.
+   % \item A PKE scheme $\PKE = (\Gen, \Enc, \Dec)$ with public keys in $\bits^\secpar$.
+\end{enumerate}
+We assume the elements of the receiver and the sender are strings in $\bits^\secpar$. We refer to each element as an identity. Build $(\gencrs , \Rs_1 ,  \Ss, \Rs_2)$ as follows.
+   
+\paragraph{$\gencrs(1^\secpar)$:}   Return $\crs \pick \HGen(1^\secpar,  3 \secpar)$.
+       
+\paragraph{$\Rs_1(\crs,S_\Rs)$:}  Assume $|S_\Rs| = 2^d$. (With small tweaks the same construction works if $S_\Rs$ is not a power of two.)
+\begin{itemize}
+    \item  Parse $\crs:=\pp$. Let $n := 2^d$, and sort  $S_\Rs := \{\id_1, \dots , \id_n\}$, where $\id_i < \id_{i+1} $ for all $i$. Populate the leaf node values as follows. For each   $\id_i \in S_\Rs$,  sample $x_i , x'_i \pick \bits^\secpar$, and let $h_i^{(0)} :=  \Hash(\pp, \id_i, x_i , x'_i)$. Set $\HH[v^{(0)}_i] := h_i^{(0)}$ and $\ID[v^{(0)}_i] := \id_i$.
+    \begin{enumerate}
+       \item For $w \in [d]$, populate the values for the nodes at level $w$ as follows. Informally, the hash value for each node is the hash of the concatenation of its left child, and right child, and the largest identity value under its left child. Formally, noting we have $2^{d-w}$ nodes on level $w$, for $j \in [2^{d-w}]$,  set $h^{(w)}_j:= \Hash(\pp, (h^{(w-1)}_{2j-1}, h^{(w-1)}_{2j}, \id_{[j,w]} )) $, where $\id_{[j,w]}$ denotes the larges leaf identity  under the left child of the current node (i.e., $\id_{[j,w]} = \id_f$, where $ f:= (2j-1)2^{w-1}$.) Set  $\HH[v^{(w)}_j] = h_j^{(w)}$ and $\ID[v^{(w)}_j] = \id_{[j,w]}$.
+       \item Set $\mathsf{psi}_1 := (d , \hr)$, where $\hr := h_1^{(d)}$ (i.e., the root hash value). Set $\st := (S_\Rs , \{x_i \} , \{ x'_i\} ,  \{v_j^{(w)} \})$ for all  values of $i \in [n]$, $w \in \{0, \dots , d\}$ and  $j \in  [2^{d-w}]$. % and $w$.
+   \end{enumerate}
+       \end{itemize}
+      
+ 
+   
+   \paragraph{$\Ss(\crs, \id,\mathsf{psi}_1)$:}
+   \begin{itemize}
+       \item Parse $ \mathsf{psi}_1 :=  (d , \hr ) $ and $\crs:=\pp$. Sample $r, r' \pick \bits^\secpar$  and let $\al{C}_0 := \al{F}[\id, r , r']$ (Table~\ref{table:hybrids-SE-CPA}). Garble $(\wt{\al{C}}_0 , \{\lb_{i,b}^{(0)} \}) \pick \Garb(\al{C}_0)$. For $1 \leq w \leq d$ 
+       \begin{enumerate}
+           \item Sample $\bo{r}_w$ at random, and let $\al{C}_w := \al{V}[\pp , \id,  \{\lb_{i,b}^{(w-1)}\},   \bo{r}_w]$. 
+           \item Garble  $(\wt{\al{C}}_w , \{\lb_{i,b}^{(w)} \}) \pick \Garb(\al{C}_w)$.
+       \end{enumerate}
+      \item  Let $\{\cth_{i,b} \} \pick \HEnc(\pp, \hr, \{\lb_{i,b}^{(d)} \} )$. Return $\mathsf{psi}_2 := (\wt{\al{C}}_0, \dots , \wt{\al{C}}_{d} , \{\cth_{i,b} \} , r)$.
+   \end{itemize} 
+ 
+ 
+ 
+ \paragraph{$\Rs_2(\crs,\st,\mathsf{psi}_2)$:}
+ \begin{itemize}
+     \item Parse $\st := (S_\Rs , \{x_i \} , \{x'_i\} ,  \{v_j^{(w)} \})$, $\mathsf{psi}_2 := (\wt{\al{C}}_0, \dots , \wt{\al{C}}_{d} , \{\cth_{i,b} \} , r)$ and   $S_\Rs : = \{ \id_1, \dots, \id_n \}$. For $i \in [n]$ let $\pth_i := ((\id_i , x_i , x'_i),   \dots  , \hr)$ be the $i$'th leaf-root path in the tree, and let $$r_i := \DecPath(\pth_i , \wt{\al{C}}_0, \dots , \wt{\al{C}}_{d} , \{\cth_{i,b} \} ). $$ If for a unique index $i \in [n]$, $r_i = r$, then output $\id_i$.  Otherwise, output $\bot$.
+ \end{itemize}  
+\end{construction}
+     
+
+  
+\begin{theorem}\label{Theo:LPSICDHLWE}
+Assuming the hash encryption $\HE$ is anonymous and robust (robustness defined in Lemma~\ref{Lemma:BLSVAnonHash}), and that the garbling scheme $\GS$ is anonymous,  the \ePSI~protocol of Construction~\ref{Const:LPSIGarb} provides statistical security for the receiver and semi-honest security for the sender. As a result, such \ePSI~protocols can be realized from CDH/LWE.  % receiver's security and semi-honest sender's security.
+\end{theorem}
+ 
+\paragraph{Roadmap for the Proof of Theorem~\ref{Theo:LPSICDHLWE}.} The fact that the protocol provides statistical security for the receiver follows from the robustness of $\HE$. In particular, robustness implies that the $h_i^{(0)}$ values statistically hide $S_\Rs$. We can continue this  to argue that all the first-level hash values (i.e., $h_i^{(1)}$) also hide $S_\Rs$, and hence, continuing like this, the root hash value $\hr$ statistically hides $S_\Rs$.
+
+
+We now prove that the protocol provides sender security against semi-honest receivers. Let $\id$ be the sender's input message, and   $S_\Rs := \{ \id_1, \dots, \id_n \}$ be the receiver's set, where $\id_i < \id_{i+1}$.  Assuming $\id \notin S_\Rs$ we will show that the sender's protocol message is pseudorandom in the receiver's point of view. For simplicity suppose  $\id < \id_1 $; the general case follows  via simple changes, which we will illustrate in Remark~\ref{Remark:Security1}. Let
+
+
+\begin{equation}\label{EQ:Path}
+    \pth :=  ((\underbrace{\id_1 , x_1 , x'_1}_{z_0}) , (\underbrace{h_0 , h'_0, \id_0}_{z_1}) ,    \dots , (\underbrace{h_{d-1} , h'_{d-1}, \id_{d-1}}_{z_{d}}) , \hr)
+\end{equation}
+
+
+
+be the leaf-root path from leaf $\id_1$ to the root. Note that $\hr = \Hash(\pp, z_d)$, and $h_i = \Hash(\pp, z_{i})$ for all $i \in \{0, \dots, d-1\}$. Noting that $\hr$ is the receiver's first-round message, we define the following hybrids for the sender's response message.
+
+\paragraph{$\Hyb_0$:} The sender's response message $\psi_2$ is formed as in the protocol.
+
+\paragraph{$\Hyb_1$:}  Sample $r, r' \pick \bits^\secpar$.  Let $(\wt{\al{C}}_0 , \{\lb_i^{(0)} \} \pick \Sim(\al{F} , r')$. For $1 \leq w \leq d$
+
+\begin{enumerate}
+    \item  Sample $\{\cth^{(w-1)}_{i,b}\} \pick \HEnc(\pp , h_{w-1} , \{\lb_i^{(w-1)} \}  )$.
+    \item  Let  $(\wt{\al{C}}_w , \{\lb_{i}^{(w)} \}) \pick \Sim(\al{V} , \{\cth_{i,b}^{(w-1)}\})$.
+\end{enumerate}
+ Let $\{\cth_{i,b} \} \pick \HEnc(\pp, \hr, \{\lb_{i}^{(d)} \} )$. Return $\mathsf{psi}_2 := (\wt{\al{C}}_0, \dots , \wt{\al{C}}_{d} , \{\cth_{i,b} \} , r)$.
+
+
+\begin{lemma}\label{Lemma:GCHyb1}
+    Hybrids $\Hyb_0$ and  $\Hyb_1$ are indistinguishable. %$\Hyb_0 \comp \Hyb_1$.
+\end{lemma}
+
+\paragraph{$\Hyb_2$:} Sample $\psi_2$ at random.
+
+
+
+
+   
+   
+   
+\begin{lemma}\label{Lemma:GCHyb2}
+   Hybrids  $\Hyb_1$ and $\Hyb_2$ are indistinguishable.
+\end{lemma}
+
+The above two lemmas establish the sender's security; namely --- if $\id \notin S_\Rs$, then the sender's  message $\psi_2$ is pseudorandom for the receiver. We prove  Lemma~\ref{Lemma:GCHyb1} in Section~\ref{SubSec:Lemma1proof} and Lemma~\ref{Lemma:GCHyb2} in Section~\ref{SubSec:Lemma1proof2}. 
+
+
+\subsection{Proof of Lemma~\ref{Lemma:GCHyb1}}\label{SubSec:Lemma1proof}
+In the following, given two hybrids $\Hyb$ and $\Hyb'$, we use the notation $\Hyb \comp \Hyb'$ to express that the hybrids are computationally indistinguishable.
+
+We define $d+1$ hybrids between $\Hyb_0$ and $\Hyb_1$, and prove their indistinguishability.
+
+For $p \in \{0, \dots , d\}$ we define $\Hyb'_{p}$ as follows. Under $\Hyb'_{p}$, we form the first $p+1$ garbled circuits $\wt{C}_0, \dots, \wt{C}_p$ and their corresponding labels honestly as in the real game, and we simulate the rest.
+
+\paragraph{$\Hyb'_{p}$:} Let $\pth$ be as in Equation~\ref{EQ:Path}, and recall that we are assuming $\id < \id_1$. Sample $r, r' \pick \bits^\secpar$  and let $\al{C}_0 := \al{F}[\id, r , r']$. Garble $(\wt{\al{C}}_0 , \{\lb_{i,b}^{(0)} \}) \pick \Garb(\al{C}_0)$. Let $\{ \lb_i^{(0)}\} := \{\lb_{i, z_0[i]}\}$. Do the following:
+
+\begin{itemize}
+    \item For $1 \leq w \leq p$ 
+       \begin{enumerate}
+           \item Sample $\bo{r}_w$ at random, and let $\al{C}_w := \al{V}[\pp , \id,  \{\lb_{i,b}^{(w-1)}\},   \bo{r}_w]$. 
+           \item Garble  $(\wt{\al{C}}_w , \{\lb_{i,b}^{(w)} \}) \pick \Garb(\al{C}_w)$.
+           \item If $w = p$ (i.e., last step), let $\{\lb_i^{(w)}\} := \{\lb_{i, z_w[i]}^{(w)}\}$.
+       \end{enumerate}
+   
+\item {\color{red}{For $p+1 \leq w \leq d$   
+   
+   \begin{enumerate}
+       \item  Sample $\{\cth^{(w-1)}_{i,b}\} \pick \HEnc(\pp , h_{w-1} , \{\lb_{i}^{(w-1)} \}  )$.
+    \item  Let  $(\wt{\al{C}}_w , \{\lb_{i}^{(w)} \}) \pick \Sim(\al{V} , \{\cth_{i,b}^{(w-1)}\})$.
+   \end{enumerate}
+   }}
+\end{itemize}
+
+       
+       
+ Let $\{\cth_{i,b} \} \pick \HEnc(\pp, \hr, \{\lb_{i}^{(d)} \} )$.  Return $\mathsf{psi}_2 := (\wt{\al{C}}_0, \dots , \wt{\al{C}}_{d} , \{\cth_{i,b} \} , r)$.
+ 
+ \begin{lemma}
+$\Hyb_0 \comp \Hyb'_d  $ and $\Hyb_1 \comp \Hyb'_0$.
+ \end{lemma}
+ \begin{proof}
+ We first show $\Hyb_1 \comp \Hyb'_0  $. Notice that either hybrid may be simulated just by knowing the value of $r$ and the pair $(\wt{\al{C}}_0, \{\lb_i^{(0)} \})$. We let $(\wt{\al{C}} , \{\lb_i \})$ and $(\wt{\al{C}'} , \{\lb'_i \})$ denote the distribution of this pair in $\Hyb_1$ and $\Hyb'_0$, respectively. We have $(\wt{\al{C}} , \{\lb_i \}) \pick \Sim(\al{F} , r') $. As for the other pair, letting $\al{C}_0 := \al{F}[\id, r , r']$ for random $r, r'$
+ \begin{align}
+     (\wt{\al{C}'} , \{\lb_{i,b} \}) &\pick \Garb(\al{C}_0) \\
+      \{\lb'_i \} &= \{ \lb_{i, z_0[i]}\},
+ \end{align}
+ where $z_0 = (\id_1, x_1 , x'_1)$.  By simulation security of garbled circuits
+ \begin{align}
+     (\wt{\al{C}'} , \{\lb'_i \} ) &\comp \Sim(\al{F} , \al{C}_{0}(z_{0}) ) \label{EQ:label1111A} \\
+     &\comp  \Sim(\al{F} , r' ). \label{EQ:label12222B}
+ \end{align}
+Thus, $(r, \wt{\al{C}} , \{\lb_i \}) \com (r, \wt{\al{C}'} , \{\lb'_i \})$, proving $\Hyb_1 \comp \Hyb'_0$.
+
+To prove $\Hyb_0 \comp \Hyb'_d  $, their only difference lies in how $\{ \cth_{i,b}\}$ is sampled: under $\Hyb_0$: $\{ \cth_{i,b}\} \pick \HEnc(\pp, \hr, \{\lb_{i,b}^{(d)} \} ) $, while under $\Hyb'_d$: $\{ \cth_{i,b}\} \pick \HEnc(\pp, \hr, \{\lb_{i}^{(d)} \} ) $, where recall that $\{\lb_{i}^{(d)} \} := \{\lb_{i, z_d[i]}^{(d)} \} $. Since $\hr = \Hash(\pp, z_d)$, by security of the hash encryption $\HEnc(\pp, \hr, \{\lb_{i}^{(d)} \} ) \comp \HEnc(\pp, \hr, \{\lb_{i,b}^{(d)} \} ) $ and the proof is now complete.
+ \end{proof}
+ 
+ \begin{lemma}
+ For all $p \in \{0, \dots, d-1\}$, $\Hyb'_p \comp \Hyb'_{p+1}$.
+ \end{lemma}
+ \begin{proof}
+ We will show that the distribution of $(\wt{C}_0, \dots, \wt{C}_{p+1} , \{\lb^{(p+1)}_i \})$ is computationally indistinguishable in the two worlds.  This will imply the result because  the rest of either hybrid may be formed based solely on the above tuple. To argue the above tuple is indistinguishable across the two hybrids, first notice that the distribution of $$(\wt{C}_0, \{\lb^{(0)}_{i,b} \} , \dots, \wt{C}_p, \{\lb^{(p)}_{i,b} \})$$ is formed exactly the same in $\Hyb'_p$ and $\Hyb'_{p+1}$. The only difference between these two hybrids lies in the way in which the pair $(\wt{C}_{p+1}, \{\lb^{(p+1)}_i\})$ is sampled. To ease notation, we let $(\wt{\al{C}} , \{\lb_i \} )$ and $(\wt{\al{C}'} , \{\lb'_i \} )$ denote the distribution of this pair in $\Hyb'_p$ and $\Hyb'_{p+1}$, respectively. Formally  
+ 
+ \begin{enumerate}
+     \item \textbf{Under $\Hyb'_p$}: We form %have $(\wt{C} , \{\lb_{i}\})$
+     \begin{align}
+         \{\cth\} &\pick \HEnc(\pp , h_{p} , \{\lb_{i}^{(p)} \}  ) \\
+            (\wt{\al{C}} , \{\lb_{i} \}) &\pick \Sim(\al{V} , \{\cth\}) \label{EQ:LAstLine}.
+     \end{align}
+     \item \textbf{Under $\Hyb'_{p+1}$}: We form
+     \begin{align*}
+      (\wt{\al{C}'} , \{\lb_{i,b} \}) &\pick \Garb(\al{C}_{p+1}) \\
+      \{\lb'_i \} &:= \{\lb_{i,z_{p+1}[i]} \},
+     \end{align*}
+     where $\al{C}_{p+1} := \al{V}[\pp , \id,  \{\lb_{i,b}^{(p)}\},   \bo{r}_{p+1}]$ and $z_{p+1} = (h_p, h'_p , \id_p)$.
+ \end{enumerate}
+ By simulation security of garbled circuits
+ \begin{align}
+     (\wt{\al{C}'} , \{\lb'_i \} ) &\comp \Sim(\al{V} , \al{C}_{p+1}(z_{p+1}) ) \label{EQ:label1111} \\
+     &\comp  \Sim(\al{V} , \HEnc(\pp, h_p, \{\lb_{i,b}^{(p)}\} ; \bo{r}_{p+1} ) ). \label{EQ:label12222}
+ \end{align}
+
+
+
+ 
+ Notice that in Equation~\ref{EQ:label12222} we use the fact $\id < \id_p$, and so by definition of $\al{C}_{p+1}$, its hardwired labels $\{\lb_{i,b}^{(p)}\}$ will be encrypted under $h_p$.\footnote{This is the place where we use the fact that $\id$ is less than all values in $S_\Rs$. In the general case, we should change the above distributions accordingly.}  Now, Equation~\ref{EQ:label12222} is identical to the right-hand side of Equation~\ref{EQ:LAstLine}, and thus $(\wt{\al{C}} , \{\lb_i \} ) \comp (\wt{\al{C}'} , \{\lb'_i \} )$.  The proof is now complete.
+ \end{proof}
+
+\subsection{Proof of Lemma~\ref{Lemma:GCHyb2}}\label{SubSec:Lemma1proof2}
+We need to show that $\mathsf{psi}_2 := (\wt{\al{C}}_0, \dots , \wt{\al{C}}_{d} , \{\cth^{(d)}_{i,b} \} , r)$ is pseudorandom, where everything is sampled as in $\Hyb_1$.   Since $(\wt{\al{C}}_0 , \{\lb_i^{(0)} \}) \pick \Sim(\al{F} , r')$ by simulation security of the garbled circuit and Lemma~\ref{Lemma:BLSVGC} the distribution of $(\wt{\al{C}}_0 , \{\lb_i^{(0)} \})$ is pseudorandom. Recall that  for $1 \leq w \leq d$ we have $\{\cth^{(w-1)}_{i,b}\} \pick \HEnc(\pp , h_w , \{\lb_i^{(w-1)} \}  )$ and $(\wt{\al{C}}_w , \{\lb_{i}^{(w)} \}) \pick \Sim(\al{V} , \{\cth_{i,b}^{(w-1)}\})$. By Lemma~\ref{Lemma:BLSVAnonHash} $\{\cth^{(w-1)}_{i,b}\}$ is pseudorandom, and thus by Lemma~\ref{Lemma:BLSVGC} $(\wt{\al{C}}_w , \{\lb_{i}^{(w)} \}$ is also pseudorandom, for all $0 \leq w \leq d-1$. Finally, since we have  $\{\cth^{(d)}_{i,b} \} \pick \HEnc(\pp, \hr, \{\lb_{i}^{(d)} \} )$, by Lemma~\ref{Lemma:BLSVAnonHash}, $\{\cth^{(d)}_{i,b} \}$ is pseudorandom. The proof is now complete. 
+
+
+\begin{remark}\label{Remark:Security1}
+   In the proof of security, we assumed $\id < \id_1$. For the general case, we just need to change the active path from that  in Equation~\ref{EQ:Path} ending in $\id_1$ to the path that will end in $\id_j$, where $j$ is the largest index such that $\id$ lies between $\id_j$ and $\id_{j+1}$. In case $\id > \id_n$, then $j = n$.
+\end{remark}
+
+
+\section{Reusable DV-NIZK Range Proofs for DJ Ciphertexts}
+\label{sec:rangeproofs}
+
+In this section, we construct a DV-NIZK scheme for ranges of DJ ciphertexts. The main idea of our construction is the following: the prover proves that a BGN ciphertext \cite{TCC:BonGohNis05} is within a certain range (this can be done via the protocol of \cite{EC:GroOstSah06}). Then it proves that the DJ and BGN ciphertexts encrypt the same value.
+
+We first recall the required cryptosystems used in this section.
+
+\paragraph{BGN cryptosystem.} Recall that the BGN cryptosystem \cite{TCC:BonGohNis05} is defined over a group $\GG$ of order $n=pq$ for primes $p,q$. The public key is composed by $(\GG,n,G,H)$ where $G$ is a generator of $\GG$ and  $H$ is an element of order $p$ (let $p\GG$ be the subgroup of order $p$). The public key is composed of $(\GG,n,G,H)$ and a ciphertext for a message $m\in\bin$ is of the form $C=G^mH^t$ for  $t\sample [n]$.
+
+
+\paragraph{Damg\r{a}rd-Jurik cryptosystem.} The Damg\r{a}rd-Jurik (DJ) cryptosystem\footnote{Here, we present a slightly different variant of the scheme in \cite{PKC:DamJur01}.} \cite{PKC:DamJur01} is defined over $\ZZ^\ast_{N^{\xi+1}}$ where $N\sample \mathsf{RSA}(\lambda)$. The public key is formed by $(N,\xi,g,h)$ where $g\sample \TT_N$ and $h=g^x$ for $x\sample [N]$. A ciphertext has the form $(c_1,c_2)$ where $c_1=g^t\smod N^{\xi+1}$ and $c_2=h^t(1+N)^m\smod N^{\xi+1}$ for $t\sample [N]$ and $m\in [N^\xi]$.
+
+
+\subsection{DV-NIZK Schemes for Linear Languages and for BGN Ciphertexts}
+
+We review some basic notions of the hash proof systems framework from \cite{EC:CraSho02}.
+
+Let $\XX,\LL,\Pi$ be finite abelian groups where $\LL$ is a proper subgroup of $\XX$. Let $\mathsf{Hom}(\XX,\Pi)$ denote the group of all homomorphisms $\phi:\XX\to\Pi$ and let $\Hc$ be a subgroup of $\mathsf{Hom}(\XX,\Pi)$. We call $\mathfrak{G}=(\Hc,\XX,\LL,\Pi)$ a group system. 
+
+We additionally assume that distinguishing uniformly chosen elements of $\LL$ from uniformly chosen elements $\XX\setminus \LL$ is a $\npol$ problem (i.e., distinguishing elements of $\LL$ and $\XX$ is an instance of a hard subset membership problem \cite{EC:CraSho02}). We denote by $w$ the witness that states that a given element $x $ is in $\LL$ and $\Rc(x,w)$ the corresponding $\npol$ relation.
+
+A group system $\mathfrak{G}=(\Hc,\XX,\LL,\Pi)$ is said to be \emph{diverse} if for all $x\in\XX\setminus \LL$ there exists $\phi\in\Hc$ such that $\phi(\LL)=0$ and  $\phi(x)\neq 0$.
+
+
+\begin{lemma}[Adapted from \cite{EC:CraSho02}, Theorem 2]
+Let $\mathfrak{G}=(\Hc,\XX,\LL,\Pi)$ be a diverse group system. Then, there exists a reusable DV-NIZK $$\mathsf{NIZK}_{\Delta}=(\mathsf{NIZK.GenCRS}_{\Delta},\mathsf{NIZK.Prove}_{\Delta},\mathsf{NIZK.Verify}_{\Delta})$$ for the language $$\Lc=\left\{x\in\XX:\exists w \text{ s.t. } \Rc(x,w)=1\right\}$$ where $\Rc$ is the $\npol$ relation that states that $x\in\LL$. The scheme fulfills statistical reusable soundness and perfect zero-knowledge.
+\end{lemma}
+
+
+
+It is easy to see that if $\XX$ is the product of cyclic groups then, for any proper subgroup $\LL$, the group system $\mathfrak{G}=(\Hc,\XX,\LL,\Pi)$ is diverse. Thus, there exists a black-box DV-NIZK for the language $\Lc$.\footnote{To establish that $\mathfrak{G}=(\Hc,\XX,\LL,\Pi)$ is a diverse group system we can combine the arguments used in Examples 1 and 2 from Sections 7.4.1 and 7.4.2 in \cite{EC:CraSho02}.}
+
+
+
+We now review some specific languages which are of the form described above and for which we can obtain efficient black-box DV-NIZK schemes. 
+
+
+In the following, let $N,n\sample \mathsf{RSA}(\lambda)$, $\xi\in\NN$ and $\GG$ be a group of order $n$ (that is, a BGN group).
+
+\paragraph{DV-NIZK for subgroup membership.} First, consider the following language for subgroup membership, which is parametrized by $(N,\xi,h)$  $${\mathcal{SM}_\Delta}=\left\{h'\in\ZZ^\ast_{N^{\xi+1}}:\exists x\in [N] \text{ s.t. } \begin{array}{c}
+     h'=h^{x}\smod N^{\xi+1}
+ \end{array} \right\}$$ where $\Delta=(N,\xi,h)$ and $h\in\TT_N$. The language allows proving that  $h'$ is in the same subgroup as $h$. In \cite{EC:CraSho02}, a reusable DV-NIZK for discrete log languages with statistical soundness is presented. 
+ 
+ We additionally consider the language parametrized by $(\GG,n,H)$  $${\mathcal{SM}_{\Delta'}}=\left\{H'\in\GG:\exists X\in [n] \text{ s.t. } \begin{array}{c}
+     H'=H^{X}\smod N^{\xi+1}
+ \end{array} \right\}$$ where $\Delta'=(\GG,n,H)$ and $H\in p\GG$.
+ 
+ 
+ \begin{lemma}[\cite{EC:CraSho02}
+]
+\label{lemma:DL}
+There exist reusable DV-NIZKs $$\mathsf{NIZK}_{\mathcal{SM}_\Theta}=(\mathsf{NIZK.GenCRS}_{\mathcal{SM}_\Theta},\mathsf{NIZK.Prove}_{\mathcal{SM}_\Theta},\mathsf{NIZK.Verify}_{\mathcal{SM}_\Theta})$$ for the language ${\mathcal{SM}_\Theta}$ for $\Theta\in \{\Delta,\Delta'\}$ where $\Delta=(N,\xi,h)$ and $\Delta'=(\GG,n,H)$. The scheme fulfills statistical reusable soundness and perfect zero-knowledge.
+\end{lemma}
+
+
+
+ \paragraph{DV-NIZK for DJ ciphertexts.} First, consider the following language for DJ ciphertexts, which is parametrized by $(\{g_i,h_i\}_i,N,\xi)$ 
+$$     {\mathcal{DJ}_\Delta}= \left\{\{c_{1,i},c_{2,i}\}_i\in \{\ZZ^\ast_{N^{\xi+1}}\}^{2\ell}
+:\exists( t,\{m_i\}_i )\in [N^\xi]^{\ell+1}
+\text{ s.t. }\begin{array}{c}
+       c_{1,i}=g_i^t\smod N^{\xi+1} \\
+       c_{2,i}=h_i^t(1+N)^{m_i}\smod N^{\xi+1}
+ \end{array}\right\}
+$$ for $i\in [\ell]$ where $\Delta=(\{g_i,h_i\}_i,N,\xi)$ and   $g_i,h_i\in\TT_N$. 
+The language allows proving that $h$ is in the same subgroup as $g$. In \cite{EC:CraSho02}, a reusable DV-NIZK for discrete log languages with statistically reusable soundness is presented. 
+
+
+\begin{lemma}[\cite{EC:CraSho02}
+]
+\label{lemma:DLforDJ}
+There exists a reusable DV-NIZK $$\mathsf{NIZK}_{\mathcal{DJ}_\Delta}=(\mathsf{NIZK.GenCRS}_{\mathcal{DJ}_\Delta},\mathsf{NIZK.Prove}_{\mathcal{DJ}_\Delta},\mathsf{NIZK.Verify}_{\mathcal{DJ}_\Delta})$$ for language ${\mathcal{DJ}_\Delta}$ where $\Delta=(\{g_i,h_i\}_i,N,\xi)$. The scheme fulfills statistical reusable soundness and perfect zero-knowledge.
+\end{lemma}
+
+
+\paragraph{DV-NIZK for equality of discrete log.} Consider also the following language for the equality of discrete logs.
+$$\mathcal{EDL}_\Delta=\left\{(h_0,h_1)\in\ZZ^\ast_{N^{\xi+1}}
+%:\exists t\in\ZZ_{N^\xi} \text{ s.t. }
+:\exists t\in [N^\xi] \text{ s.t. }
+\begin{array}{c}
+    g_0^t=h_0\smod N^{\xi+1}  \\
+     g_1^t=h_1\smod N^{\xi+1}
+\end{array}
+\right\}$$
+parametrized by $\Delta=(g_0,g_1,N,\xi)$ where $g_0,g_1\in\ZZ^\ast_{N^{\xi+1}}$. for the equality of discrete logs. Again, the framework of \cite{EC:CraSho02} can be adapted to obtain an efficient reusable DV-NIZK for this language with statistical reusable soundness.
+
+\begin{lemma}[\cite{EC:CraSho02}
+]
+\label{lemma:EDLforDJ}
+There exists a reusable DV-NIZK $$\mathsf{NIZK}_{\mathcal{EDL}_\Delta}=(\mathsf{NIZK.GenCRS}_{\mathcal{EDL}_\Delta},\mathsf{NIZK.Prove}_{\mathcal{EDL}_\Delta},\mathsf{NIZK.Verify}_{\mathcal{EDL}_\Delta})$$ where $\Delta=(g_0,g_1,N,\xi)$. The scheme fulfills statistical reusable soundness and perfect zero-knowledge.
+\end{lemma}
+
+
+
+
+
+\paragraph{DV-NIZK for equality of plaintexts.} 
+Consider the language for the equality of plaintexts in two different DJ ciphertexts
+$$    \mathcal{EPDJ}_\Delta= \left\{\{c_i,d_i\}_{i}\in \{\ZZ^\ast_{N^{\xi+1}}\}^4
+%:\exists (\{t_i\}_i,m)\in\ZZ_{N^\xi}^3 \text{ s.t. }
+:\exists (\{t_i\}_i,m)\in [N^\xi]^3 \text{ s.t. }
+\begin{array}{c}
+    c_1=g_1^{t_1}\smod N^{\xi+1}  \\
+     c_2=h_1^{t_1}(1+N)^m\smod N^{\xi+1}\\
+     d_1=g_2^{t_2}\smod N^{\xi+1}  \\
+     d_2=h_2^{t_2}(1+N)^m\smod N^{\xi+1}
+\end{array}
+\right\}$$
+for $i=1,2$, parametrized by $\Delta=((g_1,h_1),(g_2,h_2),N,\xi)$ where $g_1,h_1,g_2,h_2\in\TT_N$ for the equality of plaintexts.%$g_1,h_1,g_2,h_2\in\ZZ^\ast_{N^{\xi+1}}$ for the equality of plaintexts.
+
+\begin{lemma}[\cite{EC:CraSho02}
+]
+\label{lemma:EPDJ}
+There exists a reusable DV-NIZK $$\mathsf{NIZK}_{\mathcal{EPDJ}_\Delta}=(\mathsf{NIZK.GenCRS}_{\mathcal{EPDJ}_\Delta},\mathsf{NIZK.Prove}_{\mathcal{EPDJ}_\Delta},\mathsf{NIZK.Verify}_{\mathcal{EPDJ}_\Delta})$$ where $\Delta=((g_1,h_1),(g_2,h_2),N,\xi)$. The scheme fulfills statistical reusable soundness and perfect zero-knowledge.
+\end{lemma}
+
+
+
+
+\paragraph{Range Proofs for BGN}
+Finally, we consider the language of well-formed BGN ciphertexts encrypting a bit.
+$$\mathcal{BGN}_\Delta=\left\{ \{C_i\}_i\in\GG^\ell
+: \exists (t,\{m_i\})\in [n]^{\ell+1} \text{ s.t. } \begin{array}{c}
+     m_i\in\bin  \\
+     C_i=G^{m_i}H_i^t  
+\end{array}\right\}$$ for $i\in [\ell]$, where $\Delta=(\GG,n,G,\{H_i\}_{i\in [\ell]})$ and $G,\{H_i\}_{i\in [\ell]}\in\GG$.
+
+This is not a linear language and, thus, it cannot be instantiated using the framework of \cite{EC:CraSho02}. Fortunately, the work of \cite{EC:GroOstSah06} presents an efficient scheme for this language.
+
+
+\begin{lemma}[\cite{EC:GroOstSah06}]
+\label{lemma:GOSproof}
+There exists a reusable DV-NIZK scheme\footnote{The scheme presented in \cite{EC:GroOstSah06} is a NIZK scheme and not a DV-NIZK. However, we can view a NIZK as a DV-NIZK where $\td=\perp$.} $$\mathsf{NIZK}_{\mathcal{BGN}_\Delta}=(\mathsf{NIZK.GenCRS}_{\mathcal{BGN}_\Delta},\mathsf{NIZK.Prove}_{\mathcal{BGN}_\Delta},\mathsf{NIZK.Verify}_{\mathcal{BGN}_\Delta})$$ for the language $\mathcal{BGN}$. The protocol has perfect reusable soundness and computational zero-knowledge under the SD assumption.
+\end{lemma}
+
+\subsection{Equality of Plaintexts in DJ and BGN ciphertexts.}
+
+
+We now show how to prove that a BGN and a DJ ciphertexts encrypt the same value. Consider the following language
+$$
+    \mathcal{EQ}_\Delta= \left\{D_0,h_0,\{D_i,c_{1,i},c_{2,i}\}_{i\in [\ell]}: \exists (r,t,\{m_i\}) \text{ s.t. } \begin{array}{c}
+m_i\in\bin\\
+D_0=H_0^r\in\GG\\
+     D_i=G^{m_i}H_i^r\in\GG \\
+     c_0=h_0^t\in \ZZ^\ast_{N^{\xi+1}}\\
+     c_{1}=g^{t}\in \ZZ^\ast_{N^{\xi+1}} \\ 
+     c_{2,i}=h_i^{t}(1+N)^{m_i}\in \ZZ^\ast_{N^{\xi+1}}
+\end{array} \right\}
+$$
+where $\Delta=(\GG,n,G,H_0,\{H_i\}_{i\in[\ell]},N,\xi,g,h_0,\{h_i\}_{i\in [\ell]})$, such that $G,H_0,\{H_i\}_{i\in[\ell]}\in\GG$ and  $g,h_0,\{h_i\}_{i\in [\ell]}\in \TT_N$.% $g,h_0,\{h_i\}_{i\in [\ell]}\in \ZZ^\ast_{N^{\xi+1}}$.
+
+
+\begin{construction}
+\label{construction:equalityBGNDJ}
+ %\pedro{parameter for $\ell$}
+Let $\ell\in\ZZ$. Let $\Delta=(\GG,n,G,H_0,\{H_i\}_{i\in[\ell]},N,\xi,g,h_0,\{h_i\}_{i\in [\ell]})$ be as above, such that $n>N^{\xi+1}$. Let $\beta\in\NN$ such that $\lambda/\beta=\negl[\lambda]$, and $N^\xi/2>\ell \beta$. We require the following ingredients:
+\begin{enumerate}
+    \item The scheme of Lemma \ref{lemma:GOSproof}, $\mathsf{NIZK}_{\mathcal{BGN}_{\Delta_1}}=(\mathsf{NIZK.GenCRS}_{\mathcal{BGN}_{\Delta_1}},\mathsf{NIZK.Prove}_{\mathcal{BGN}_{\Delta_1}},\mathsf{NIZK.Verify}_{\mathcal{BGN}_{\Delta_1}})$ for some $\Delta_1=(\GG,n,G,\{H_i\}_{i\in[\ell]})$.
+    \item The scheme of Lemma \ref{lemma:DLforDJ}, $\mathsf{NIZK}_{\mathcal{DJ}_{\Delta_2}}=(\mathsf{NIZK.GenCRS}_{\mathcal{DJ}_{\Delta_2}},\mathsf{NIZK.Prove}_{\mathcal{DJ}_{\Delta_2}},\mathsf{NIZK.Verify}_{\mathcal{DJ}_{\Delta_2}})$ for some $\Delta_2=(\{g,h_i\}_i,N,\xi)$.
+   \item The scheme of Lemma \ref{lemma:DLforDJ}, $$\mathsf{NIZK}_{\mathcal{SM}_\Theta}=(\mathsf{NIZK.GenCRS}_{\mathcal{SM}_\Theta},\mathsf{NIZK.Prove}_{\mathcal{SM}_\Theta},\mathsf{NIZK.Verify}_{\mathcal{SM}_\Theta})$$ for language ${\mathcal{SM}_\Theta}$ for $\Theta\in \{\Delta_3,\Delta_3'\}$ where $\Delta_3=(N,\xi,h)$ and $\Delta_3'=(\GG,n,H)$.
+
+\end{enumerate}
+We present the scheme in full detail.
+\paragraph{$\mathsf{GenCRS}_{\mathcal{EQ}_{\Delta}}(1^\lambda):$}
+\begin{itemize}
+\item Compute $(\crs_1,\td_1)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{BGN}_{\Delta_1}}(1^\lambda)$ where $\Delta_1=(\GG,\{G,H_i\}_{i\in [\ell]})$.
+    \item Compute $(\crs_2,\td_2)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{DJ}_{\Delta_2}}(1^\lambda)$ where $\Delta_2=(\{g,h_i\}_{i\in [\ell]},N,\xi)$. %\pedro{This is the DJ well-formness proof}
+    %  \item Compute $(\crs_3,\td_3)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{DL}_{\Delta_3}}(1^\lambda)$ where $\Delta_3=(\GG,n,H_0,N,\xi,h_0)$.
+     \item Compute $(\crs_3,\td_3),(\crs'_3,\td'_3)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{SM}_\Theta}(1^\lambda)$ where $\Theta\in \{\Delta,\Delta'\}$ where $\Delta=(N,\xi,h)$ and $\Delta'=(\GG,n,H)$.
+     
+    \item For all $j\in [\lambda]$, do the following:
+    \begin{itemize}
+ \item Sample $\alpha_j\sample [N/4]$ and $A_j\sample [n]$. For all $i\in[\ell]$, sample $\sigma_{i,j}\sample\bin$. Compute  $f_{j}=h_0^{\alpha_j} \prod_{i=1}^\ell h_i^{\sigma_{i,j}} \smod N^{\xi+1}$ and $F_j=H_0^{A_j}\prod_{i=1}^\ell H_{i}^{\sigma_{i,j}}$
+ \end{itemize}
+   
+    \item Output $\crs=\left( \{F_j,f_j\}_{j\in [\lambda]},\crs_1,\crs_2,\crs_3\right)$ and $\td=\left(\{\alpha_j,A_j,\{\sigma_{i,j}\}_{{i}\in[\ell]}\}_{j\in[\lambda]},\td_1,\td_2,\td_3\right)$
+\end{itemize}
+
+\paragraph{$\mathsf{Prove}_{\mathcal{EQ}_{\Delta}}(\crs,x=(D_0,h_0\{D_i,c_{1,i},c_{2,i}\}_{i\in[\ell]}),w=(r,t,\{m_{i\in[\ell]}\})):$}
+\begin{itemize}
+    \item Parse $\crs$ as $\left( \{F_j,f_j\}_{j\in [\lambda]},\crs_1,\crs_2,\crs_3\right)$.
+    \item Compute $\pi_1\leftarrow\mathsf{NIZK.Prove}_{\mathcal{BGN}_{\Delta_1}}(\crs_1, x_1, w_1)$ where $x_1=\{D_i\}_{i\in[\ell]}$ and $ w_1=(r,\{m_i\}_{i\in[\ell]})$.
+    \item Compute $\pi_2\leftarrow\mathsf{NIZK.Prove}_{\mathcal{DJ}_{\Delta_2}}(\crs_2, x_2,w_2)$ where $ x_2=\{c_{1,i},c_{2,i}\}_{i\in[\ell]}$ and $ w_2=(t,\{m_i\}_{i\in[\ell]})$.
+    \item Compute $\pi_3\leftarrow\mathsf{NIZK.Prove}_{\mathcal{SM}_{\Delta_3}}(\crs_3,x_3,w_3)$, where $x_3=c_0$ and $w_3=t$,  and $\pi_3'\leftarrow\mathsf{NIZK.Prove}_{\mathcal{SM}_{\Delta_3'}}(\crs_3,x_3',w_3')$ where $x_3=D_0$ and $w_3'=r$.
+    
+  
+    \item For all $j\in [\lambda]$, do the following:
+ Sample $\tau_j\sample \Phi_{\ZZ,\beta}$ and compute $a_{j}={f_{j}}^{t}(1+N)^{\tau_{j}}\smod N^{\xi+1}$.  Compute $K_j=G^{\tau_j}F_j^r$. 
+    \item Output $\pi=\left(\{a_j,K_j\}_{j\in [\lambda]},\pi_1,\pi_2,\pi_3\right)$.
+\end{itemize}
+
+\paragraph{$\mathsf{Verify}_{\mathcal{EQ}_{\Delta}}(\td,x,\pi):$}
+\begin{itemize}
+\item Parse $\pi$ as $\left(\{a_j,K_j\}_{j\in [\lambda]},\pi_1,\pi_2,\pi_3\right)$ and $\td$ as $\left(\{\alpha_j,A_j,\{\sigma_{i,j}\}_{{i}\in[\ell]}\}_{j\in[\lambda]},\td_1,\td_2,\td_3\right)$
+\item If $0\leftarrow\mathsf{NIZK.Verify}_{\mathcal{BGN}_{\Delta_1}}\left(\td_1, x_1,\pi_1\right)$ where $ x_1=\{D_i\}_{i\in[\ell]}$, output $0$.
+\item If $0\leftarrow\mathsf{NIZK.Verify}_{\mathcal{DJ}_{\Delta_2}}\left(\td_2, x_2,\pi_2\right)$ where $ x_2=\{c_{1,i},c_{2.i}\}_{i\in[\ell]}$, output $0$.
+  \item If $0\leftarrow\mathsf{NIZK.Verify}_{\mathcal{SM}_{\Delta_3}}\left(\td_3, x_3,\pi_3\right)$ where $ x_3=c_0$ or if $0\leftarrow\mathsf{NIZK.Verify}_{\mathcal{SM}_{\Delta_3'}}\left(\td_3, x_3',\pi_3'\right)$ where $ x_3=D_0$, output $0$.
+
+
+\item For all $j\in [\lambda]$, do the following:
+\begin{itemize}
+    \item For all $i\in[\ell]$, compute $z_{j}=a_{j}^{-1}c_0^{\alpha_j}\prod_{i=1}^\ell c_{2,i}^{\sigma_{i,j}}\smod N^{\xi+1}$. If there is a $z_{j}$ which is not of the form $(1+N)^{y_{j}}$, output $0$. Else, recover $y_{j}$. 
+\item Compute $L_j=K_j^{-1}D_0^{A_j} \prod_i D_i^{\sigma_{i,j}}$ in $\GG$.
+\end{itemize}
+\item If there is a $j\in [\lambda]$ such that $G^{y_j}\neq L_j$ in $\GG$, output $0$. Else, output $1$. 
+\end{itemize}
+\end{construction}
+
+
+
+
+\begin{lemma}
+The scheme presented in Construction \ref{construction:equalityBGNDJ} is complete.
+\end{lemma}
+
+\begin{proof}
+Assume $x\in\mathcal{EQ}_\Delta$. Fix a $j\in [\lambda]$. Then, \begin{align*}
+    z_{j}&=a_{j}^{-1}c_0^{\alpha_j}\prod_{i=1}^\ell c_{2,i}^{\sigma_{j}} \smod N^{\xi+1}\\ 
+    &=\left(h_0^{\alpha_j}\prod_{i=1}^{\ell} h_i^{\sigma_{i,j}}\right)^{-t}(1+N)^{-\tau_{j}}h_0^{t\alpha_j}\prod_{i=1}^\ell h_i^{t\sigma_{i,j}} (1+N)^{m_i\sigma_{i,j}} \smod N^{\xi+1}\\ 
+    &=(1+N)^{\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j}}\smod N^{\xi+1}
+\end{align*} 
+from which the verifier can recover $y_{j}=\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j}$.
+ Moreover, $|y_j|<\ell \beta <N^\xi/2<n/2$. That is, $y_j$ does not wrap around modulo $N^\xi$ nor modulo $n$. 
+
+In addition, we have \begin{align*}
+    L_j &= K_j^{-1} D_0^{A_j}\prod_{i=1}^\ell D_i^{\sigma_{i,j}} \\ 
+    &= \left  (H_0^{A_j}\prod H_i^{\sigma_{i,i}}\right)^{-r} G^{-\tau} H_0^{rA_0}\prod_{i=1}^\ell (H_i^rG^{m_i})^{\sigma_{i,j}}\\
+    %&= G^{\sum_{i=1}^\ell m_i\sigma_{i,j} -\tau_{j}}H_i^{r\sum_{i=1}^\ell \sigma_{i,j}}\prod_{i=1}^\ell H_i^{r\sigma_{i,j}}\\
+    &= G^{\sum_{i=1}^\ell m_i\sigma_{i,j} -\tau_{j}} =G^{y_j}
+\end{align*} in $\GG$.
+Thus, the proof is accepted as valid because $y_j\mod N^\xi=y_j\mod n$.
+\qed
+\end{proof}
+
+
+\begin{lemma}
+The scheme presented in Construction \ref{construction:equalityBGNDJ} has zero knowledge under the SD assumption.
+\end{lemma}
+
+
+
+\begin{proof}
+To prove zero knowledge, we construct a simulator $\Sim_\mathsf{ZK}$ that creates transcripts which are indistinguishable from the ones outputted by the protocol.
+
+Let $\Sim_1$, $\Sim_2$, $\Sim_3$ and $\Sim_3'$ be the zero-knowledge simulators of the schemes $\mathsf{NIZK}_{\mathcal{BGN}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{DJ}_{\Delta_2}}$, $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3}}$ and $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3'}}$,respectively (which exist by Lemma \ref{lemma:GOSproof}, Lemma \ref{lemma:DLforDJ} and Lemma \ref{lemma:DL}) The simulator $\Sim_\mathsf{ZK}$ works as follows:
+\begin{itemize}
+    \item \textbf{CRS generation.} It creates a $\crs$ exactly as in the real protocol and keeps $\td=\left(\{\sigma_{i,j}\}_{{i}\in[\ell],j\in [\lambda]},\td_1,\td_2,\td_3,\td_3'\right)$ to itself.
+    \item Upon receiving an instance $(D_0,h_0\{D_i,c_{1,i},c_{2,i}\}_{i\in [\ell]})$, $\Sim_\mathsf{ZK}$ first simulates $\pi_1\leftarrow\mathsf{Sim}_1(\td_1,x_1)$, $\pi_2\leftarrow\mathsf{Sim}_2(\td_2,x_2)$, $\pi_3\leftarrow\mathsf{Sim}_3(\td_3,x_3)$ and $\pi_3'\leftarrow\mathsf{Sim}_3(\td_3,x'_3)$. Then, it repeats the following for every $j\in [\lambda]$: It samples $\tau_{j}\sample \Phi_{\ZZ,\beta}$ and computes $a_{j}=(1+N)^{\tau_{j}}c_0^{\alpha_j} \prod c_{2,i}^{\sigma_{i,j}}\smod N^{\xi+1}$ and $K_j=G^{\tau_{j}}H_0^{A_j}\prod D_i^{\sigma_{i,j}}$.
+    \item It outputs $\pi=(\{a_{j},K_j\}_{j\in [\lambda]},\pi_1,\pi_2,\pi_3)$.
+\end{itemize}
+We now argue that the distributions of the proofs outputted by $\mathsf{Prove}_{\mathcal{EQ}_\Delta}$ and $\Sim_\mathsf{ZK}$ are indistinguishable. By the zero-knowledge property of $\mathsf{NIZK}_{\mathcal{BGN}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{DJ}_{\Delta_2}}$, $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3}}$ and $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3'}}$ the proofs $\pi_1$, $\pi_2$, $\pi_3$ and $\pi_3'$ are indistinguishable from the real ones ($\pi_1$ is computationally indistinguishable given that the SD assumption holds). So, we just need to analyze the distributions of $a_{j}$ and $K_j$.
+
+
+We start by analyzing the distribution of $a_{j}$. First note that, \begin{align*}
+    a_{j}^{-1}c_0^{\alpha_j}\prod_{i=1}^\ell c_{2,i}^{\sigma_{i,j}}& =c_0^{-\alpha_j}\prod_{i=1}^\ell c_{2,i}^{-\sigma_{i,j}}(1+N)^{-\tau_{j}} c_0^{\alpha_j} \prod_{i=1}^\ell  c_{2,i}^{\sigma_{i,j}} \smod N^{\xi+1}\\ 
+     & = (1+N)^{-\tau_{j}}\smod N^{\xi+1}
+\end{align*}
+
+
+To see that $a_{j}$ is indistinguishable from one created in the real-world, note that by Lemma \ref{lemma:drown}, we have that $\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j} \approx_{\negl[\lambda]}\tau_{j}$, for $\tau_{j}\sample  \Phi_{\ZZ,\beta}$ and $m_i,\sigma_{i,j}\in\bin$, since $\lambda/\beta=\negl[\lambda]$. Hence, $$(1+N)^{\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j}} \approx_{\negl[\lambda]}(1+N)^{\tau_{j}}$$ and therefore $$c_0^{\alpha_j}\prod_{i=1}^\ell c_{2,i}^{\sigma_{i,j}}(1+N)^{\tau_{j}}\approx_{\negl[\lambda]} f_{j}^t(1+N)^{\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j}}.$$
+
+An identical argument can be used to show that $K_j$ is indistinguishable from the one created in the real protocol.
+\qed
+\end{proof}
+
+
+\begin{lemma}
+\label{}
+The scheme presented in Construction \ref{construction:equalityBGNDJ} has statistical reusable soundness.
+\end{lemma}
+\begin{proof}
+We first show how the simulator $\Sim_\mathsf{Snd}$ simulates the $\mathsf{Verify}_{\mathcal{EQ}_\Delta}(\td,\cdot,\cdot)$ oracle to the adversary. Since we are proving \emph{statistical} reusable soundness, our simulator is allowed to run in exponential time.
+
+$\Sim_\mathsf{Snd}$ works as follows:
+\begin{itemize}
+     \item \textbf{CRS generation.} 
+    It generates $\crs$ by sampling $f_{j}\sample \mathbb{T}_N$ and $F_j\sample p\GG$. 
+     \item Upon receiving a query to the oracle $\Verify$ consisting of a statement $x=(D_0,h_0,\{D_i,c_{1,i},c_{2,i}\}_{i\in [\ell]})$ together with a proof $\pi$ from the adversary, it does the following:
+    \begin{enumerate}
+    \item It brute-forces the statement $(D_0,\{D_i\}_{i\in [\ell]})$ to recover the witness $(r,\{m_i\}_{i\in [\ell]})$, and $(c_0,\{c_{1,i},c_{2,i}\}_{i\in [\ell]})$ to recover $(t,\{m_i'\}_{i\in [\ell]})$.
+    \item It parses $\pi$ as $(\{a_{j},K_j\}_{j\in [\lambda]},\pi_1,\pi_2,\pi_3)$. It brute-forces $a_{j}$ to recover $\{\bar t_j,\tau'_{j}\}$, and $K_j$ to recover $(\bar r_j,\tau_j)$.
+        \item\label{enum:check1} If there is an index $i$ such that $(c_{1,i},c_{2,i})$ are not of the form $c_{1,i}=g^{t_i}\smod N^{\xi+1}$ and $c_{2,i}=h^{t_i}(1+N)^{m_i'}\smod N^{\xi+1}$ or $D_i$ is not of the form $D_i=G^{m_i}H_i^{r}$ in $\GG$ where $m_i\in\bin$, it outputs $0$.
+         \item\label{enum:check2} If there is an index $i$ such that $a_i$ is not of the form $f_i^{t}(1+N))^{\tau_i'}\smod N^{\xi+1}$ (meaning that $\bar t_i\neq t$), it outputs $0$. Moreover, if $K$ is not of the form $G^{\tau_j}F_j^r$ in $\GG$ (meaning that $\bar r_j\neq r$), output $0$.
+         \item \label{enum:checkDL} If $c_0$ is not of the form $h^{ t}\smod N^{\xi+1}$ or if $D_0$ is not of the form $H_0^r$, it outputs $0$.
+        \item\label{enum:check3} If there is $i\in [\ell]$ or $j\in [\lambda]$ such that $m_i\neq m_i'$ or $ \tau_{j}'\neq \tau_j$, it outputs $0$. Else, it  outputs $1$
+        \end{enumerate}
+        \item Upon receiving the challenge proof $(x^*,\pi^*)$, it performs the same checks as in steps \ref{enum:check1}, \ref{enum:check2} and \ref{enum:checkDL}. If the tests pass,  it samples $\sigma_{i,j}\sample \bin$ and checks if $$G^{\sum_{i=1}^\ell \sigma_{i,j} m'_i -\tau_{j}'\smod N^{\xi}}=G^{\sum_{i=1}^\ell \sigma_{i,j}m_i-\tau_j}$$ for every $j\in [\lambda]$. It outputs $0$ if the test fails, $1$ otherwise. 
+\end{itemize}
+
+
+\paragraph{$\Hyb_0$:} This is the real reusable soundness game.
+
+\paragraph{$\Hyb_1$:}  This game is identical to the previous one except that $\Sim_\mathsf{Snd}$ brute-forces the pairs statement/proof $(x,\pi)$, to recover the witness $(r,\{m_i\}_{i\in [\ell]})$, $(t,\{m_i'\}_{i\in [\ell]})$, and the values $(\tau_j,\bar r_j)$ and $\{\bar t_{j},\tau_{j}'\}$ from the proof. Finally, it performs the checks in steps \ref{enum:check1} and \ref{enum:check2}.
+
+\begin{claim}
+Hybrids $\Hyb_0$ and $\Hyb_1$ are indistinguishable.
+\end{claim}
+
+
+The statistical reusable soundness of the schemes $\mathsf{NIZK}_{\mathcal{BGN}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{DJ}_{\Delta_2}}$, $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3}}$ and $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3'}}$ guarantees that $D_0$, $c_0$, $D_i$ and $(c_{1,i},c_{2,i})$ are of the prescribed form, except with negligible probability. 
+
+
+Now fix $j\in [\lambda]$ and assume that $a_j=f_j^{\bar t_j}(1+N)^{\tau_{j}}$. Then, since $a_{j}^{-1}\prod_{i=1}^\ell c_{2,i}^{\sigma_{i,j}}$ must be of the form $(1+N)^{y_{j}}$, we must have $$-\bar t_{j}\left(\alpha_j+\sum_{i=1}^\ell w_{i}\sigma_{i,j}\right)+t\left(\alpha_j+\sum_{i=1}^\ell w_i\sigma_{i,j}\right)=0\smod \phi(N)/4$$ where $h_0=h_i^{w_i}$. Thus $\bar t_j=t$.
+
+An identical reasoning can be applied to argue that $K_j$ must be of the form $G^{\tau_j} F_j^r$.
+
+
+
+
+\paragraph{$\Hyb_2$.} This hybrid is identical to the previous one, except that $\Sim_\mathsf{Snd}$ performs the checks in step \ref{enum:check3}.
+
+\begin{claim}
+Hybrids $\Hyb_1$ and $\Hyb_2$ are indistinguishable.
+\end{claim}
+
+The adversary $\Ac$ is able to distinguish both hybrids if there is a proof which is accepted in hybrid $\Hyb_1$ but rejected $\Hyb_2$ (or vice-versa). 
+That is, suppose that $\Ac$ outputs $(\{m_i,m_i'\}, \{\tau_j,\tau_{j}'\})$. Fix $j$. Then the proof is accepted in $\Hyb_1$ if 
+\begin{equation}
+    \label{eq:soundnessstatement}
+    \sum_{i=1}^\ell \sigma_{i,j} m_i - \tau_j \smod n=\left( \sum_{i=1}^\ell \sigma_{i,j}m_i' -\tau'_j \smod N^{\xi+1} \right)\smod n.
+\end{equation}
+Let $e_j=\sum_{i=1}^\ell\sigma_{i,j}m_i$ and $d_j=\sum_{i=1}^\ell \sigma_{i,j}(m_i'-m_i)$. 
+Then, equation \ref{eq:soundnessstatement} can be rewritten as $$e_j\mod n= (e_j+d_j-\tau'_j\smod N^{\xi+1})-\tau_j \smod n.$$
+ Consider the function $\Gamma_j(z)$ defined as $\Gamma_j(z)=(z-\tau'_j\smod N^{\xi+1})-\tau_j \smod n$. it is easy to see that $\Gamma_j(z)$ is injective in $\ZZ_{N^{\xi+1}}$. Let $z_1,z_2$ be such that \begin{align*}
+      \Gamma_j(z_1)&=\Gamma_j(z_2)\\
+      (z_1-\tau'_j\smod N^{\xi+1})-\tau_j \smod n&= (z_2-\tau'_j\smod N^{\xi+1})-\tau_j \smod n \\ 
+      (z_1-\tau'_j\smod N^{\xi+1})&= (z_2-\tau'_j\smod N^{\xi+1}) \\ 
+      z_1\smod N^{\xi+1}&= z_2-\tau'\smod N^{\xi+1}
+ \end{align*} where the second equivalence holds because $n>N^{\xi+1}$. 
+ 
+ Since $\Gamma_j$ is injective, then we must have \begin{align*}
+      e_j\smod N^{\xi+1}&=e_j+d_j\smod N^{\xi+1}\\
+      \sum_{i=1}^\ell\sigma_{i,j}m_i \smod N^{\xi+1}&= \sum_{i=1}^\ell \sigma_{i,j}m_i +\sigma_{i,j}(m_i'-m_i) \smod  N^{\xi+1} \\ \sum_{i=1}^\ell\sigma_{i,j}m_i \smod N^{\xi+1}&= \sum_{i=1}^\ell \sigma_{i,j}m_i' \smod  N^{\xi+1} \\
+ \end{align*} 
+ Assume that there is an index $i$ such that $m_i\neq m_i'$. Then the test will fail with at most $1/2$ probability, for a fixed $j$.
+ Repeating the process for $j\in [\lambda]$, we get that $m_i=m_i'$, except with negligible probability. Thus $\tau_{j}'=\tau_j$.
+\paragraph{Hybrid $\Hyb_3$.} This hybrid is identical to the previous one, except that $f_i$ is chosen uniformly from $\mathbb{T}_N$ and $H$ is chosen uniformly from $p\GG$. 
+
+\begin{claim}
+Hybrids $\Hyb_2$ and $\Hyb_3$ are indistinguishable.
+\end{claim}
+
+Since $\alpha_j\sample \ZZ_N$, we can build a hybrid where $\alpha_j$ is sampled from $\ZZ_N^*$, incurring a difference only in the statistical distance. Moreover, since $H_0$ is a generator of $p\GG$, $H_0^{A_j}$ is uniform in $p\GG$. The claim follows.
+
+ \begin{claim}
+ \label{claim:neglsound}
+ Let $\Ac$ be any adversary. For hybrid $\Hyb_3$, $\Ac$ has a negligible advantage.
+ \end{claim}
+
+Assume that $\Ac$ outputs $(x^*,\pi^*)$ where $x^*\notin \mathcal{EQ}_\Delta$. Since $\sigma_{i,j}\sample \bin$, then the proof gets accepted if equation \ref{eq:soundnessstatement} is fulfilled. As we have seen before, this happens only with negligible probability.
+\qed
+\end{proof}
+
+
+
+\subsection{DV-NIZK for Range Proofs of DJ Ciphertexts with Equal Discrete Log}
+
+Let $N\leftarrow\mathsf{RSA}(\lambda)$ and $\xi\geq 0$ be a fixed integer. 
+Consider the following language of ranges: 
+$$\mathcal{REDJ}_{\Delta}=\left\{c_1\in \{\ZZ^\ast_{N^{\xi+1}}\}^2
+:\exists t\in \{\lceil- N^\xi/2,\dots, N^\xi/2 \rceil\}%\ZZ_{N^\xi}
+\text{ s.t. }\begin{array}{c}
+     t\in [-B,B] \\
+     c_1=g^t \smod N^{\xi+1}\\ 
+\end{array}\right \}$$ which is parametrized by $\Delta=(g,B,N,\xi) $ where $g\in \TT_N$, $B\in\ZZ$,  $N$ and $\xi$.
+
+
+In the following, we present a DV-NIZK scheme for the language above. The main idea is quite simple: The prover outputs BGN ciphertexts $D_i$ encrypting bits $m_i$ and DJ ciphertexts $(c_{1,i},c_{2,i})$ that encrypt the same values as $D_i$ (we can prove this using the scheme from the previous section). Then, the prover proves that $(c_1,c_2)$ encrypts the same value as $\left(\prod_{i=0}^\ell c_{1,i}^{2^i},\prod_{i=0}^\ell c_{2,i}^{2^i}\right)$. Since DJ is linearly-homomorphic, we conclude that $(c_1,c_2)$ encrypts $m=\sum_{i=0}^\ell 2^i m_i \leq 2^{\ell-1}$.
+
+\begin{construction}
+\label{construction:rangeDJ}
+Let $\ell\in\NN$ and $B=2^{\ell-1}$
+Let
+\begin{itemize}
+    \item $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}=(\mathsf{NIZK.GenCRS}_{\mathcal{EQ}_{\Delta_1}},\mathsf{NIZK.Prove}_{\mathcal{EQ}_{\Delta_1}},\mathsf{NIZK.Verify}_{\mathcal{EQ}_{\Delta_1}})$ be the scheme in Construction \ref{construction:equalityBGNDJ}, for some $\Delta_1=(\GG,n,G,H_0,\{H_i\}_{i\in[\ell]},N,\xi,g,h_0,\{h_i\}_i)$;
+    
+    \item  $\mathsf{NIZK}_{\mathcal{EPDJ}_{\Delta_2}}=(\mathsf{NIZK.GenCRS}_{\mathcal{EPDJ}_{\Delta_2}},\mathsf{NIZK.Prove}_{\mathcal{EPDJ}_{\Delta_2}},\mathsf{NIZK.Verify}_{\mathcal{EPDJ}_{\Delta_2}})$ be the scheme of Lemma \ref{lemma:EPDJ}, for some $\Delta_2=((g_1,h_1),(g_2,h_2),N,\xi)$;
+    \item $\mathsf{NIZK}_{\mathcal{EDL}_{\Delta_3}}=(\mathsf{NIZK.GenCRS}_{\mathcal{EDL}_{\Delta_3}},\mathsf{NIZK.Prove}_{\mathcal{EDL}_{\Delta_3}},\mathsf{NIZK.Verify}_{\mathcal{EDL}_{\Delta_3}})$ be the scheme of Lemma \ref{lemma:EDLforDJ}, for some $\Delta_3=(g,h,N,\xi)$. 
+\end{itemize}
+We now present the scheme in full detail. 
+ \paragraph{$\mathsf{GenCRS}_{\mathcal{REDJ}_{\Delta}}(1^\lambda):$}
+\begin{itemize}
+      \item Compute $(\crs_1,\td_1)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{EQ}_{\Delta_1}}(1^\lambda)$ where $\Delta_1=(\GG,n,G,H_0,\{H_i\}_{i\in[\ell]},N,\xi,g,h_0,\{h_i\}_{i\in[\ell]})$.
+      \item Compute $(\crs_{2,i},\td_{2,i})\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{EPDJ}_{\Delta_2}}(1^\lambda)$ where $\Delta_{2,i}=((g,h),(g,h_i),N,\xi)$ for all $i\in [\ell]$.
+      \item Compute $(\crs_{2,0},\td_{2,0})\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{EPDJ}_{\Delta_2}}(1^\lambda)$ where $\Delta_{2,0}=((g,h),(g,h),N,\xi)$.% for all $i\in [\ell]$.
+     \item Compute $(\crs_3,\td_3)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{EDL}_{\Delta_3}}(1^\lambda)$  where $\Delta_3=(g,h(1+N),N,\xi)$.
+     \item Output $\crs=(\crs_1,\crs_{2,0},\crs_3,\{\crs_{2,i}\}_{i\in [\ell]})$ and $\td=(\td_1,\td_{2,0},\td_3,\{\td_{2,i}\}_{i\in [\ell]})$.
+\end{itemize}
+
+ \paragraph{$\mathsf{Prove}_{\mathcal{REDJ}_{\Delta}}(\crs,x=c_1,w=t):$}
+ \begin{itemize}
+\item Parse $\crs$ as $(\crs_1,\crs_{2,0},\crs_3,\{\crs_{2,i}\}_{i\in [\ell]})$.
+Sample $r\sample \ZZ_N$ and $s\sample \ZZ_N$. Compute the ciphertexts $D_i=G^{t_i}H_i^r$, $D_0=H_0^r$, $d_0=h_0^s\smod N^{\xi+1}$ and $(d_{1,i},d_{2,i})$ where $d_{1,i}=g^{s}\smod N^{\xi+1}$ and $d_{2,i}=h_i^{s}(1+N)^{t_i}\smod N^{\xi+1}$. Additionally, compute $c_2=h^t(1+N)^t$. Compute the proof $\pi_1\leftarrow\mathsf{NIZK.Prove}_{\mathcal{EQ}_{\Delta_1}}(\crs_1,x_1,w_1)$ where $x_1=(D_0,d_0,\{D_i,d_{1,i},d_{2,i}\}_{i\in [\ell]})$ and $w_1=(r,s,\{t_i\}_{i\in[\ell]})$.
+
+\item For $i\in[\ell]$,  sample $s_i\sample \ZZ_N$. Compute the ciphertexts $(c_{1,i},c_{2,i})$ where $c_{1,i}=g^{s_i}\smod N^{\xi+1}$ and $c_{2,i}=h^{s_i}(1+N)^{t_i}\smod N^{\xi+1}$. Compute the proofs $\pi_{2,i}\leftarrow \mathsf{Prove}_{\mathcal{EPDJ}_{\Delta_{2,i}}}(crs_{2,i},x_{2,i},w_{2,i})$ for $i\in [\ell]$ where $x_{2,i}=(c_{1,i},c_{2,i},d_{1,i},d_{2,i})$ and $w_{2,i}=(s_i,r,t_i)$.
+
+\item Compute new ciphertexts $(\bar c_1,\bar c_2)$ and $(c_1,c_2')$ where $\bar c_1=\prod_{i=1}^\ell (c_{1,i})^{2^{i-1}}$, $\bar c_2=\prod_{i=1}^\ell (c_{2,i})^{2^{i-1}}$ and $c_2'=c_2(1+N)^{B/2}$. 
+Compute the proof $\pi_{2,0}\leftarrow\mathsf{NIZK.Prove}_{\mathcal{EPDJ}_{\Delta_{2,0}}}(\crs_{2,0},x_{2,0},w_{2,0})$ where $x_{2,0}=((c_1,c_2'),(\bar c_1,\bar c_2))$ and $w_{2,0}=(t,\bar s, t+B/2)$ with $\bar s=\sum_{j=1}^{\ell} s_j2^{j-1}$.
+\item Compute the proof $\pi_3\leftarrow\mathsf{NIZK.Prove}_{\mathcal{EDL}_{\Delta_3}}(\crs_3,x_3,w_3)$ where $x_3=(c_1,c_2)$ and $w_3=t$.
+\item Output $\pi=(D_0,d_0,c_2,\{D_i,d_{1,i},d_{2,i},c_{1,i},c_{2,i},\pi_{2,i}\}_{i\in [\ell]},\pi_1,\pi_{2,0},\pi_3)$.
+ \end{itemize}
+
+ \paragraph{$\mathsf{Verify}_{\mathcal{REDJ}_{\Delta}}(\td,x,\pi):$}
+  \begin{itemize}
+  \item Parse $\pi$ as $(D_0,d_0,c_2,\{D_i,d_{1,i},d_{2,i},c_{1,i},c_{2,i},\pi_{2,i}\}_{i\in [\ell]},\pi_1,\pi_{2,0},\pi_3)$ and $\td$ as $(\td_1,\td_{2,0},\td_3,\{\td_{2,i}\}_{i\in [\ell]})$
+  \item Compute $\bar c_1=\prod_{i=1}^\ell (c_{1,i})^{2^{i-1}}$, $\bar c_2=\prod_{i=1}^\ell (c_{2,i})^{2^{i-1}}$ and $c_2'=c_2(1+N)^{B/2}$.
+  \item If $0\leftarrow\mathsf{NIZK.Verify}_{\mathcal{EQ}_{\Delta_1}}\left(\td_1, x_1,\pi_1\right)$ where $ x_1=(D_0,d_0,\{D_i,c_{1,i},c_{2,i}\}_{i\in [\ell]})$, output $0$.
+  \item If $0\leftarrow\mathsf{NIZK.Verify}_{\mathcal{EPDJ}_{\Delta_{2,i}}}\left(\td_{2,i}, x_{2,i},\pi_{2,i}\right)$, for all $i\in \{0, \dots, \ell\}$, output $0$.
+  \item If $0\leftarrow\mathsf{NIZK.Verify}_{\mathcal{EDL}_{\Delta_1}}\left(\td_3, x_3,\pi_3\right)$ where $x_3=(c_1,c_2)$, output $0$. Else, output $1$.
+ \end{itemize}
+\end{construction}
+
+\begin{lemma}
+\label{lemma:completerangeDJ}
+The scheme presented in Construction \ref{construction:rangeDJ} is complete.
+\end{lemma}
+\begin{proof}
+Let $c_1\in\mathcal{REDJ}_\Delta$. Then, by the completeness of $\mathsf{NIZK}_{\mathcal{EDL}_{\Delta_3}}$, the proof $\pi_3$ is accepted. Now, the ciphertexts $(c_{1,i},c_{2,i})$ encrypt bits $t_i$ by the completeness of $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}$. This means that the ciphertext $(\bar c_1,\bar c_2)$ encrypts $\bar t=\sum_{i=1}^\ell 2^{i-1}t_i$. Hence, $\bar t\in [0,B]$. By the completeness of $\mathsf{NIZK}_{\mathcal{EPDJ}_{\Delta_2}}$, $(c_1,c_2')$ encrypts $\bar t \in [0,B]$ and, thus, $(c_1,c_2=c_2'(1+N)^{-B/2})$ encrypts $t\in [-B/2,B/2]$. We conclude that the proof is accepted as valid. 
+
+\end{proof}
+
+\begin{lemma}
+\label{lemma:zkrangeDJ}
+The scheme presented in Construction \ref{construction:rangeDJ} has zero knowledge under the SD assumption.
+\end{lemma}
+\begin{proof}
+The proof follows from the fact that the schemes $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{EPDJ}_{\Delta_2}}$ and $\mathsf{NIZK}_{\mathcal{EDL}_{\Delta_3}}$ are zero-knowledge (here $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}$ has computational zero-knowledge under the SD assumption).
+
+\end{proof}
+
+
+\begin{lemma}
+\label{lemma:soundrangeDJ}
+The scheme presented in Construction \ref{construction:rangeDJ} is statistically simulation sound.
+\end{lemma}
+\begin{proof}
+The proof follows readily from the fact that the schemes $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{EPDJ}_{\Delta_2}}$ and $\mathsf{NIZK}_{\mathcal{EDL}_{\Delta_3}}$ are statistically simulation sound and that the DJ scheme is linear homomorphic. That is, if $(c_{1,i},c_{2,i})$ all encrypt bits, then $(\bar c_1,\bar c_2)$ where $\bar c_1=\prod_{i=1}^\ell (c_{1,i})^{2^{i-1}}$ and  $\bar c_2=\prod_{i=1}^\ell (c_{2,i})^{2^{i-1}}$ is an encryption of a value smaller than $2^{\ell-1}$.
+\end{proof}
+
+\section{Reusable Laconic Private Set Intersection}
+\label{sec:lpsi}
+
+In this section, we present a  protocol that implements \ePSI~ in a black-box fashion. We then prove that the protocol guarantees security against a semi-honest receiver and against a malicious sender. The input sets are subsets of a universe $\Uc$ of exponential size.
+
+\paragraph{Protocol.} 
+We now present the construction for reusable PSI.
+\begin{construction}
+\label{const:lpsi}
+Let $\Uc$ be a universe which contains the input sets of the parties. Let $\kappa\in\ZZ$ such that $5\kappa\leq \lambda$ and $\xi\in\NN$.
+ 
+We require the following ingredients in this construction:
+\begin{enumerate}
+    \item A PPRF $\mathsf{PPRF}:\Kc\times \Uc\to \mathsf{Primes}(\kappa)$ which outputs a prime number.\footnote{We remark that we use a PPRF, not because we want uniform outputs, but to implicitly define the set of primes. A similar trick was used in \cite{C:BoyGilIsh16}.}
+    \item A DV-NIZK $\mathsf{NIZK}_{\mathcal{REDJ}_{\Delta}}=(\mathsf{NIZK.GenCRS}_{\mathcal{REDJ}_{\Delta}},$ $\mathsf{NIZK.Prove}_{\mathcal{REDJ}_{\Delta}},$ $\mathsf{NIZKVerify}_{\mathcal{REDJ}_{\Delta}})$ for the language $\mathcal{REDJ}_{\Delta}$ which is defined in Section \ref{sec:rangeproofs}, for some $\Delta=(g_0,B,N,\xi)$. 
+    \item An IND-CPA PKE scheme $\mathsf{PKE}=(\mathsf{PKE.KeyGen}, \mathsf{PKE.Enc},\mathsf{PKE.Dec})$
+    \item A $(\kappa-1,\negl[\lambda])$-strong extractor $\mathsf{Ext}:\Sc\times \ZZ_{N^{\xi+1}}\to\bin^\lambda$. 
+\end{enumerate}
+
+We assume that the receiver's set is of size $M$ and the sender's set is of size $m$, where $M>m$. 
+The protocol is composed by the following algorithms:
+\paragraph{$\mathsf{GenCRS}(1^\lambda):$}
+\begin{itemize}
+    \item Sample $N\sample \mathsf{RSA}(\lambda)$, that is, $N=PQ$ where $P,Q$ are safe prime numbers.
+     Choose $B$ such that $N^{\xi-1}/2 \ge B > N 2^{\kappa}$.
+
+   \item Sample a pair of public and secret keys $(\pk,\sk)\leftarrow\mathsf{PKE.KeyGen}(1^\lambda)$. Additionally, sample a PPRF key $k\sample \Kc$. Set $\Delta=(g_0,B,N,\xi)$ where $g_0\sample \TT_N$.
+    \item Output $\crs=(N,\pk,g_0,B,k,\Delta)$.
+\end{itemize}
+\paragraph{$\Rs_1(\crs,S_\Rs):$}
+\begin{itemize}
+    \item Parse $\crs := (N,\pk,g_0,B,k,\Delta)$, and $S_\Rs := \{\id_i\}_{i\in [M]}\subseteq \Uc$
+    \item Compute the prime numbers $p_i\leftarrow \mathsf{PPRF}(k,\id_i)$, for all $i\in [M]$.
+
+    \item Sample $r\sample [N/4]$ and compute $h=g_0^{r\prod_{i\in [M]} p_i}\smod N^{\xi+1}$.
+    \item Run $\left(\crs_1,\td_1\right)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{REDJ}_{\Delta}}(1^\lambda)$.
+    \item Output $\st=\left(r,\td_1\right)$ and $\mathsf{psi}_1=\left(h,\crs_1\right)$.
+\end{itemize}
+
+
+\paragraph{$\Ss(\crs,S_\Ss,\mathsf{psi}_1):$}
+\begin{itemize}
+    \item Parse $\crs := (N,\pk,g_0,B,k,\Delta)$, $\mathsf{psi}_1 := \left(h,\crs_1\right)$ and $S_\Ss := \{\id'_i\}_{i\in [m]}\subseteq \Uc$.
+\item For $i\in \left[m\right]$ do the following: 
+\begin{itemize}
+
+\item Sample $\rho_i\sample [N/4]$. Compute the prime numbers $p_i\leftarrow\mathsf{PPRF}(k,\id'_i)$.
+ \item Sample an extractor seed $s_i\sample \Sc$ and compute $R_i\leftarrow\mathsf{Ext}(s_i, h^{\rho_i}\smod N^{\xi+1})$
+
+\item Compute $f_i=g_0^{\rho_ip_i}\smod N^{\xi+1}$ and $\ct_i\leftarrow\mathsf{PKE.Enc}(\pk,\id'_i;R_i)$.
+\item Compute $\pi_i\leftarrow\mathsf{NIZK.Prove}_{\mathcal{REDJ}_\Delta}\left(\crs_1,x_i,w_i\right)$ where $x_i=f_i$ and $w_i=\rho_ip_i$.
+\end{itemize}
+\item Output $\mathsf{psi}_2=\left\{f_i,\ct_i,s_i,\pi_i\right\}_{i\in [m]}$.
+\end{itemize}
+
+\paragraph{$\Rs_2(\crs,\st,\mathsf{psi}_2):$}
+\begin{itemize}
+    \item Parse $\st := (r,\td_1)$ and $\mathsf{psi}_2 := \left\{f_i,\ct_i,s_i,\pi_i\right\}_{i\in [m]}$.  Set $\Ic=\emptyset$
+    \item For all $j\in [m]$ do the following: \begin{itemize}
+        \item If $0\leftarrow\mathsf{NIZK.Verify}_{\mathcal{REDJ}_{\Delta}}(\td_1,x_j,\pi_j)$ where $x_j=f_j$, abort the protocol.
+        \item If there is a $i\in [M]$ such that $$\ct_j=\mathsf{PKE.Enc}(\pk,\id_i;R'_i)$$ where $R_i'\leftarrow\mathsf{Ext}(s_j,f_j^{r_i}\smod N^{\xi+1})$ and $r_i={r \displaystyle\prod_{
+         \ell=1,
+        \ell\neq i
+     }^M p_\ell}$, then add the element $\id_i$ to $\Ic$. 
+    \end{itemize} 
+ \item Output $\Ic$.
+\end{itemize}
+\end{construction}
+
+\paragraph{Communication cost.} Here, we analyze the communication cost of the protocol as a function of the input set sizes $|S_\Ss|=m$ and $|S_\Rs|=M$ and we omit polynomial factors in the security parameter $\lambda$. The first message outputted by $\Rs_1$ has size $\Oc(1)$. The second message outputted by $\Ss$ has size $\Oc(m)$. The overall communication cost is $\Oc(m)$, that is, it is independent of $M$.
+
+
+\paragraph{Analysis.} We now analyze the correctness and security of the protocol.
+\begin{theorem}
+\label{theor:correctPSI}
+The protocol presented in Construction \ref{const:lpsi} is correct given that $\mathsf{NIZK}_{\mathcal{REDJ}_{\Delta}}$ is complete and $\PKE$ is correct.
+\end{theorem}
+\begin{proof}
+
+Let $(h,\crs_1)$ be the message sent by $\Rs_1$ created using the set $S_\Rs$ as input. 
+
+Fix an index $j$ such that $b_j\in S_\Ss\cap S_\Rs$. Upon receiving $(f_j,\ct_j,s_j,\pi_j^\mathcal{REDJ})$ from $S_\Ss$ (i.e., the part of $\mathsf{psi}_2$ with respect to $b_j$).
+
+Since $|\rho_jp_j|<2^{\kappa}N<B$, then $1\leftarrow\mathsf{NIZK.Verify}_{\mathcal{REDJ}_{\Delta}}(\td_1,x_j,\pi_j)$ where $x_j=f_j$ except with negligible probability by the completeness of $\mathsf{NIZK}_{\mathcal{REDJ}_\Delta}$.
+
+Additionally, let  $\tilde r=r\prod_{i:q_i\neq p_j} q_i $ where $q_i\leftarrow\mathsf{PPRF}(k,\id_i)$ for $\id_i\in S_\Rs$ and $p_j\leftarrow\mathsf{PPRF}(k,b_j)$. Then \begin{align*}
+    f_j^{\tilde r} \smod N^{\xi+1} & = g_0^{\rho_jp_j r \prod_{i:q_i\neq p_j} q_i } \smod N^{\xi+1}\\ 
+    & = g_0 ^{\rho_j r \prod_{i} q_i } \smod N^{\xi+1}\\
+    & = h ^{\rho_j} \smod N^{\xi+1}.
+\end{align*}
+Hence, $R_j'=R_j$ and thus, $\ct_j=\mathsf{PKE.Enc}(\pk,b_j;R_j')$. Therefore, $b_j $ is added to $\Ic$. 
+\qed
+\end{proof}
+
+\begin{theorem}
+\label{theor:securityPSI}
+The protocol presented in Construction \ref{const:lpsi} securely UC-realizes functionality $\Fc_\mathsf{rPSI}$ in the $\Gc_\mathsf{CRS}$-hybrid model against:
+\begin{itemize}
+    \item a semi-honest receiver given that the $\phi$-hiding assumption hold and $\mathsf{NIZK}_{\mathcal{REDJ}_{\Delta}}$ is zero-knowledge;
+    \item a malicious sender,  given that the DCR assumption holds and $\mathsf{NIZK}_{\mathcal{REDJ}_{\Delta}}$ is reusable sound.
+\end{itemize}
+\end{theorem}
+
+\begin{proof}
+We start by proving that the protocol is secure against semi-honest adversaries corrupting the receiver.
+
+\begin{lemma}
+\label{lemma:SHreceiverLPSI}
+The protocol is secure against a semi-honest receiver.
+\end{lemma}
+
+We first show how the simulator $\Sim_\Rs$ works.  In the following, let $\Sim_{\mathsf{NIZK}}$ be the zero-knowledge simulator from Lemma \ref{lemma:zkrangeDJ} for the $\mathsf{NIZK}_{\mathcal{REDJ}_\Delta}$ scheme.
+\begin{enumerate}
+    \item $\Sim_\Rs$ takes the input $S_\Rs$ of $\Rs$ and sends it to the ideal functionality $\Fc_\mathsf{rPSI}$.
+    \item \textbf{CRS generation.} To generate the CRS, $\Sim$ behaves as the honest algorithm would do.
+    \item The simulator creates the semi-honest receiver's view exactly as in the real protocol and keeps $\st=(r,\td_1)$ to itself.
+    \item Upon receiving a message $\mathsf{psi}_1=(h,\crs_1)$ from $\Rs$ and a message $\Ic$ (of size $m'$, that is, $|\Ic|=m'$) from the ideal functionality $\Fc_{\mathsf{rPSI}}$, the simulator does the following:  
+    \begin{itemize}
+        \item Sample a subset $\Xc$ of size $m-m'$ from the universe $\Uc$ and sets $S_\Sc=\Ic\cup \Xc$.
+        \item For all $i\in\Ic$, $\Sim_\Rs$ computes $(f_i,\ct_i,s_i,\pi_i)$ as in the real protocol.
+        \item For all $i\in S_\Ss\setminus \Ic$, $\Sim_\Rs$ simulates proofs $\pi_i\leftarrow\Sim_\mathsf{NIZK}(\td_1,x)$ for $x=f_i$ where $f_i\sample \TT_N$. Then, it encrypts $\ct_i\leftarrow\mathsf{PKE.Enc}(\pk,0;R_i)$ where $R_i\leftarrow\bin^\lambda$.
+    \end{itemize}
+\end{enumerate}
+
+To prove indistinguishability between the real protocol and the simulated one, we consider the following sequence of hybrids:
+
+\paragraph{$\Hyb_0$:} The is the real protocol.
+
+
+\paragraph{$\Hyb_1$:} This hybrid is identical to the previous one, except that, for $i\in S_\Ss\setminus \Ic$, $\Sim_\Rs$ simulates the proofs $\pi_i\leftarrow\Sim_\mathsf{NIZK}(\td_1,x)$ for $x_i=f_i$.
+
+\begin{claim}
+Hybrids $\Hyb_0$ and $\Hyb_1$ are statistically indistinguishable.
+\end{claim}
+
+The claim above follows directly from the statistical zero-knowledge of the scheme $\mathsf{NIZK}_{\mathcal{REDJ}_\Delta}$.
+
+\paragraph{$\Hyb_{2,\ell}$:} This hybrid is identical to the previous one, except that the simulator samples $f_{u_\ell}\sample \TT_N$ and computes $$R_{u_\ell}\leftarrow\mathsf{Ext}\left(s,f_{u_\ell}^{rq_{u_\ell}^{-1}\prod_j^M p_j}\smod N^{\xi+1}\right)$$ where $q_{u_\ell}\leftarrow\mathsf{PPRF}(k,x_{u_\ell})$ for all $u_\ell\in \{i:x_i\in S_\Ss\setminus \Ic \}$ and $p_j\leftarrow\mathsf{PPRF}(k,y_j)$ for all $y_j\in S_\Rs$. The hybrid is defined for $\ell=1,\dots, m-m'$.
+
+
+\begin{claim}
+\label{claim:2to3ReceiverLPSI}
+ Hybrids $\Hyb_1$ and $\Hyb_{2,m-m'}$ are indistinguishable.
+\end{claim}
+
+
+
+We prove that hybrids $\Hyb_{2,\ell-1}$ and $\Hyb_{2,\ell}$ are indistinguishable for $\ell=1,\dots , m-m'$ and where $\Hyb_{2,0}=\Hyb_1$.
+
+
+First, remark that the distribution of $\rho_{u_\ell}$ is the uniform distribution over $[N/4]$.
+Hence, we can build a statistically indistinguishable sequence of hybrids $\Hyb_2'$ where we sample $\rho_{u_\ell}\sample [\phi(N)/4]$ incurring difference only in the statistical distance.
+
+Now, since $g_0$ and $g_0^{p_{u_\ell}}$ are generators of $\TT_N$, %$\Z_N^*$, 
+then the distribution of $g_0^{\rho_{u_\ell} p_{u_\ell}}$ is identical to $\tilde f_i\sample \TT_N$, for $\rho_{u_\ell}\sample [\phi(N)/4]$. 
+
+For $p_i$ sampled using $\mathsf{PPRF}$ (for a uniform input $x_{u_\ell}\sample \Uc$), we know that $p_{u_\ell}$  does not divide $\phi(N)$ and $\rho_{u_\ell} \in[\phi(N)/4]$ if $\rho_{u_\ell}\sample [N/4]$, except with negligible probability. We conclude that $$\tilde f_{u_\ell} \smod N^{\xi+1}\approx_{\negl[\lambda]} g_0^{\rho_{u_\ell}p_{u_\ell}}\smod N^{\xi+1}$$ where $\tilde f_{u_\ell}\sample \TT_N$, $g_0\sample \TT_N$, $\rho_{u_\ell}\sample [\phi(N)/4]$ and $p_{u_\ell}\sample \mathsf{Primes}(\kappa)$.
+
+Using a similar argument, we have that 
+for any $G$
+$$   \left (f_{u_\ell}\smod N^{\xi+1},{f_{u_\ell}}^{ G p_{u_\ell}^{-1}}\smod N^{\xi+1}\right)\approx_{\negl[\lambda]} \left( g_0^{\rho_{u_\ell} p_{u_\ell}}\smod N^{\xi+1},{ g_0}^{\rho_{u_\ell} G}\smod N^{\xi+1}\right).
+$$
+
+
+\paragraph{$\Hyb_{3,\ell}$:} This hybrid is identical to the previous one except that $\Sim_\Rs$ computes $R_{u_\ell}\sample \bin^\lambda$ for all $u_\ell\in \{i:x_i\in S_\Ss\setminus \Ic \}$. The hybrid is defined for $\ell=1,\dots, m-m'$.
+
+\begin{claim}
+Assume that $\mathsf{Ext}$ is a $(\kappa-1,\negl[\lambda])$-strong extractor and that the $\phi$-hiding assumption holds. Then hybrids $\Hyb_{2,m-m'}$ and $\Hyb_{3,m-m'}$ are indistinguishable.
+\end{claim}
+We prove that hybrids $\Hyb_{3,\ell-1}$ and $\Hyb_{3,\ell}$ are indistinguishable by constructing a reduction that contradicts Lemma \ref{lemma:phiext}, for $\ell=1,\dots, m-m'$ and where $\Hyb_{2,m-m'}=\Hyb_{3,0}$. 
+
+Suppose that there is an adversary $\Ac$ that distinguishes hybrids $\Hyb_{3,\ell-1}$ and $\Hyb_{3,\ell}$. We build an adversary $\Bc$ that breaks Lemma \ref{lemma:phiext}. 
+
+
+$\Bc$ receives as input $(N,s,q,\tilde g)$. It behaves as the simulator in Hybrid $\Hyb_{3,\ell-1}$ except that it sets the modulus in the crs to be $N$. Additionally, it programs the PPRF such that $q\leftarrow\mathsf{PPRF}(k,x_{u_\ell})$ (this step is done while creating the PPRF key). Upon receiving a message from $\Ac$ (together with its view),
+ it computes $G=r\prod_i^M p_i$ where $p_i\leftarrow\mathsf{PPRF}(k,x_i)$ for $x_i\in S_\Rs$. It sends $G$ to the challenger and receives $\tilde z$. This value $\tilde z$ is either equal to $\mathsf{Ext}(s,\tilde g^{G/q}\smod N^{\xi+1})$, if $\gamma=0$, or it is uniformly chosen, if $\gamma=1$, where $\gamma$ is the challenge bit. Now $\Bc$ sets $f_{u_\ell}=\tilde g$, $\ct\leftarrow\mathsf{Enc}(\pk,x_{u_\ell};R_{u_\ell})$ and sends $\mathsf{psi}_2$ as in Hybrid $\Hc_{3,\ell-1}$ except that the $u_\ell$-th coordinate is $(f_{u_\ell},\ct_{u_\ell},s_{u_\ell},\pi_{u_\ell})$. The adversary outputs a bit $b$ and $\Bc$ sets $b$ as its guess. It is easy to see that if $\gamma=0$, then $\Bc$'s message is indistinguishable from the message of hybrid $\Hyb_{3,\ell-1}$ and if $\gamma=1$, then it is indistinguishable from the message sent in hybrid $\Hyb_{3,\ell}$. 
+
+
+\paragraph{$\Hyb_{4,\ell}$:} This hybrid is identical to the previous one except that  $\Sim_\Rs$ encrypts $\ct_{u\ell}\leftarrow\mathsf{PKE.Enc}(\pk,0;R_{u_\ell})$ for all for all $u_\ell\in \{i:x_i\in S_\Ss\setminus \Ic \}$. The hybrid is defined for $\ell=1,\dots, m-m'$.  Hybrid $\Hyb_{4,m-m'}$ is identical to the simulation.
+
+\begin{claim}
+Assume that $\mathsf{PKE}$ is an IND-CPA PKE. Then hybrids $\Hyb_{3,m-m'}$ and $\Hyb_{4,m-m'}$ are indistinguishable.
+\end{claim}
+
+The claim follows directly from the IND-CPA property of the underlying PKE. That is, given an adversary $\Ac$ that distinguishes both hybrids, we can easily build an adversary $\Bc$ against the IND-CPA property of $\mathsf{PKE}$. This adversary $\Bc$ simply chooses as messages $m_0=x_{u_\ell}$ (where $x_{u_\ell}\in S_\Ss\setminus \Ic$) and $m_1=0$. It outputs whatever $\Ac$ outputs.
+ 
+
+
+\begin{lemma}\label{lemmma:psi-mal-sender}
+The protocol is secure against malicious senders.
+\end{lemma}
+
+
+
+We first show how the simulator $\Sim_\Ss$ extracts the sender's input:
+
+\begin{enumerate}
+    \item \textbf{CRS generation.} $\Sim_\Ss$ generates the $\crs$ following the algorithm $\gencrs$, except that it sets $g_0=g_0'(1+N)$ for $g_0'\sample \TT_N$. It keeps $\phi(N)$ to itself (which can be computed using the prime numbers $P,Q$) and the secret key $\sk$ corresponding to $\pk$. It outputs $\crs=(\pk,g_0,B,k,\Delta)$
+    \item $\Sim_\Ss$ samples $h\sample\TT_N$ and computes $\left(\crs_1,\td_1\right)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{REDJ}_{\Delta}}(1^\lambda)$. It sends $\mathsf{psi}_1=\left(h,\crs_1\right)$ to the malicious sender.
+    \item Whenever $\Sim_\Ss$ receives a message $\mathsf{psi}_2=\left\{f_i,\ct,s_i,\pi_i\right\}_{i\in [m]}$ from the sender, the simulator initially sets $S_\Ss$ and does the following for all $i\in [m]$:
+    \begin{itemize}
+        \item It checks if $1\leftarrow\mathsf{NIZK.Verify}_{\mathcal{REDJ}_{\Delta}}(\td_1,x_j,\pi_j)$ where $x_j=f_j$, and aborts otherwise.
+       % \item It computes $\id'_i\leftarrow\mathsf{PKE.Dec}(\sk,\ct_i)$ and $p_i\leftarrow\mathsf{PPRF}(k,\id'_i)$. Additionally, it extracts $\zeta_i$ by  recovering $ \zeta_i'$ from $(1+N)^{\zeta'_i}=F_i^{\phi(N)}$ and computing $\zeta=\zeta'/\phi(N)$ over the integers. It computes $\rho_i'=\zeta_i/p_i$ over the integers. If $\ct_i=\mathsf{PKE.Enc}(\pk,\id'_i;R_i)$ where $R_i=\mathsf{Ext}(s_i,h^{\rho_i'}\smod N^{\xi+1})$, then it adds $\id'_i$ to $S_\Ss$. 
+        \item It computes $\id'_i\leftarrow\mathsf{PKE.Dec}(\sk,\ct_i)$ and $p_i\leftarrow\mathsf{PPRF}(k,\id'_i)$. Additionally, it extracts $\zeta_i$ by  recovering $ \zeta_i'$ from $(1+N)^{\zeta'_i}=f_i^{\phi(N)}$ and computing $\zeta=\zeta'/\phi(N)$ over the integers. It computes $\rho_i'=\zeta_i/p_i$ over the integers. If $\ct_i=\mathsf{PKE.Enc}(\pk,\id'_i;R_i)$ where $R_i=\mathsf{Ext}(s_i,h^{\rho_i'}\smod N^{\xi+1})$, then it adds $\id'_i$ to $S_\Ss$. 
+    \end{itemize}
+    \item It sends $S_\Ss$ to $\Fc_{\mathsf{PSI}}$ and halts.
+\end{enumerate}
+
+We now show that the simulation is indistinguishable from the real protocol via the following sequence of hybrids.
+\paragraph{$\Hyb_0$:} This hybrid is the real protocol.
+
+\paragraph{$\Hyb_1$:} This hybrid is identical to the previous one except that the simulator computes the first message (sent by the receiver) as $h\sample\TT_N$.
+
+\begin{claim}
+Hybrids $\Hyb_0$ and $\Hyb_1$ are statistically indistinguishable.
+\end{claim}
+Since $g_0$ is a generator of $\TT_N$, the distributions of $g^x$ and $h\sample \TT_N$ are identical. It follows that the hybrids are indistinguishable.
+
+
+\paragraph{$\Hyb_2$:} This hybrid is identical to the previous one, except that $g_0=g_0'(1+N)$ for $g_0'\sample \TT_N$ (instead of choosing $g_0\sample \TT_N$). Additionally, $\Sim_\Ss$ keeps $(\phi(N),\sk)$ while creating $\crs$. %Note that $\crs$ is perfectly indistinguishable from a honestly created one.
+
+\begin{claim}
+Assume that the DCR assumption holds. Then hybrids $\Hyb_1$ and $\Hyb_2$ are indistinguishable.
+\end{claim}
+ The claim follows directly from Corollary \ref{lemma:variantDCR}.
+
+\paragraph{$\Hyb_3$:} This hybrid is identical to the previous one except that the simulator, instead of checking if there is an index $i$ for which $$\ct_j=\mathsf{PKE.Enc}(\pk,\id_i;R'_i)$$ where $R_i'=\mathsf{Ext}(s_j,f_j^{r_i})$ and $r_i={r \displaystyle\prod_{
+         \ell=1,
+        \ell\neq i
+     }^M p_\ell}$ (as in the real protocol), it does the checks as in the simulation. That is, it computes $\id'_i\leftarrow\mathsf{PKE.Dec}(\sk,\ct_i)$ and $p_i\leftarrow\mathsf{PPRF}(k,\id'_i)$. Additionally, it extracts $\zeta_i$ by  recovering $ \zeta_i'$ from $(1+N)^{\zeta'_i}=f_i^{\phi(N)}$ and computing $\zeta=\zeta'/\phi(N)$. It computes $\rho_i'=\zeta_i/p_i$ over the integers. Then, it checks if $\ct_i=\mathsf{PKE.Enc}(\pk,\id'_i;R_i)$ where $R_i=\mathsf{Ext}(s_i,h^{\rho_i'})$.
+     
+\begin{claim}
+Hybrids $\Hyb_2$ and $\Hyb_3$ are indistinguishable given that $\mathsf{PKE}$ is correct and $\mathsf{NIZK}_{\mathcal{REDJ}_\Delta}$ is simulation sound.
+\end{claim}     
+
+By the simulation soundness of $\mathsf{NIZK}_{\mathcal{REDJ}_\Delta}$, $\zeta_i<N^{\xi-1}/2$. Hence, $\zeta_i'<N^\xi/2$ and thus $\zeta_i'\smod N^\xi$ is equal to $\zeta_i'$ as an integer. Computing $\zeta=\zeta_i'/\phi(N)$ yields $\rho_i p_i$ over $\ZZ$. Thus $\rho_i=\zeta_i/p_i$ over $\ZZ$.
+
+Thus, performing the checks in this hybrid has the same outcome as in the real protocol.
+\qed
+\end{proof}
+
+
+
+
+\paragraph{Setting the parameters.} The value $B$ is such that $N^{\xi-1}/2\geq B >N 2^\kappa $ for $5\kappa\leq \lambda$. Then, it is enough to set $\xi=3$, so that we can find a $B$ that fulfills the condition.
+
+\paragraph{Achieving statistical security against the sender.} The protocol presented in Construction \ref{const:lpsi} achieves computational security against a malicious sender given that the DCR assumption holds (recall that $\mathsf{NIZK}_{\mathcal{REDJ}_\Delta}$ achieves statistical reusable soundness). 
+
+The only place where we use the DCR assumption in the proof of security against a malicious sender is when we replace $g_0\sample \TT_N$ by $g_0=g_0'(1+N)$. Hence, consider the following modification of the protocol presented in Construction \ref{const:lpsi}: In $\mathsf{GenCRS}$, the element $g_0$ is chosen as $g_0'(1+N)$ for $g_0'$. This simple modification of the protocol yields a new one which is \emph{statistically secure against a malicious sender}. On the other hand, security against a semi-honest receiver now relies on the hardness of $\phi$-hiding (as before) \emph{and} the DCR assumption.
+
+\section{Labeled Laconic PSI and Laconic OT}
+\label{sec:ExtensionPSI}
+
+
+In this section, we show how we can extend the techniques developed in Section \ref{sec:lpsi} to construct LPSI to obtain new constructions of labelled LPSI and LOT. Both constructions are reusable and secure against malicious senders.
+
+
+
+\subsection{Reusable Labeled Laconic PSI Secure Against a Malicious Sender}
+\label{subsec:lablpsi}
+%As in \cite{SCN:JarLiu10,CCS:CHLR18}
+% Labeled PSI is coined in \cite{SCN:JarLiu10,CCS:CHLR18} as an extension of standard PSI protocol. 
+% In certain applications, the sender holds a \emph{label} $\ell_i$ for each item $x_i$
+% in its set,
+% and we wish to allow the receiver to learn the labels corresponding to the items in the intersection.
+% In other words, the receiver should learn $\{(x_i,\ell_i): x_i\in I\}$ as a result of the protocol execution, where $I$ is the intersection.
+% Labeled PSI has some immediate practical applications to private web service queries as mentioned in \cite{CCS:CHLR18}.
+% In this section, we are interested in \emph{reusable labelled PSI}  requiring that the first message of the receiver is reusable. Here is a natural user case: Considering the server (denoted as Alice) of a secure messaging app (e.g. WhatsApp) holding the full list of its clients, it wants to send messages to some clients Bob and his friends (Cathy, Diana, Eve, etc.), but only Bob has their public keys for messaging. Now a reusable labelled laconic PSI comes in.
+
+
+
+
+\paragraph{Reusable Labeled PSI functionality.}
+The functionality $\Fc_{\mathsf{rLPSI}}$ is parametrized by a universe $\Uc$ and by a universe of labels $\Lc$ and works as follows:
+\begin{itemize}
+    \item \textbf{Setup phase.}
+$\Rs$ sends $(\sid,S_\Rs)$ to  $\Fc_{\mathsf{rLPSI}}$ where $S_\Rs\subseteq \Uc$. It ignores future messages from $\Rs$ with the same $\sid$.
+
+
+  \item \textbf{Send phase.}
+  $\Ss$ sends $\left (\sid,i,S_{\Ss,\mathsf{lab}}\subseteq\Uc \times \Lc\right )$ from $\Ss$ to $\Fc_{\mathsf{rLPSI}}$. $\Fc_{\mathsf{rLPSI}}$ sends $(\sid,i,S_{\Rs\cap S_\Ss,\mathsf{lab}})$ to $\Rs$, where $S_{\Rs\cap S_\Ss,\mathsf{lab}}=\{(y,\ell)\in S_{\Ss,\mathsf{lab}}: y\in S_\Rs\}$. It  ignores future messages from $\Ss$ with the same $\sid$ and $i\in\NN$.
+\end{itemize}
+
+
+\paragraph{Protocol.} We now present the construction for labeled reusable PSI.
+ 
+\begin{construction}
+\label{const:llpsi}
+Let $\Uc$ be a universe which contains the input sets of the parties. Let $\kappa\in\ZZ$ such that $5\kappa\leq \lambda$. Let
+\begin{itemize}
+    \item $\mathsf{PRF}:\Kc\times \Uc\to \mathsf{Primes}(\kappa)$ be a PRF which outputs prime numbers
+    \item $\mathcal{REDJ}_{\Delta}$ be the language defined in Section \ref{sec:rangeproofs} and   $\mathsf{NIZK}_{\mathcal{REDJ}_{\Delta}}=$\\* $(\mathsf{NIZK.GenCRS}_{\mathcal{REDJ}_{\Delta}},\mathsf{NIZK.Prove}_{\mathcal{REDJ}_{\Delta}},$ $\mathsf{NIZKVerify}_{\mathcal{REDJ}_{\Delta}})$ be a DV-NIZK for the language $\mathcal{REDJ}_{\Delta}$,  for some $\Delta=((g_0,g_1),B,N,\xi)$. 
+    \item $\mathsf{PKE}=(\mathsf{PKE.KeyGen}, \mathsf{PKE.Enc},\mathsf{PKE.Dec})$ be an IND-CPA PKE scheme
+    \item $\mathsf{Ext}:\Sc\times \ZZ_{N^{\xi+1}}\to\bin^{2\lambda}$ be a $(\kappa-1,\negl[\lambda])$-strong extractor.
+\end{itemize}
+We assume that the receiver's set is of size $M$ and the sender's set is of size $m$, where $M>m$. 
+The protocol is composed of the following algorithms:
+\paragraph{$\mathsf{GenCRS}:$} This algorithm is identical to the one described in Construction \ref{const:lpsi}.%, except \pedro{for the extractor}
+\paragraph{$\Rs_1(\crs,S_\Rs):$} This algorithm is identical to the one described in Construction \ref{const:lpsi}.
+
+
+\paragraph{$\Ss(\crs,S_\Ss,\mathsf{psi}_1):$} This algorithm is identical to the one described in Construction \ref{const:lpsi}, except that $(R_i||T_i)\leftarrow\mathsf{Ext}(s,h^{\rho_i}\smod N^{\xi+1})$. The string $R_i$ is used to encrypt the set element (as in Construction \ref{const:lpsi}) Additionally, compute $\bar{\ct}_i=T_i\oplus \mathsf{lab}_i$, where $\mathsf{lab}_i$ is the corresponding label.
+
+\paragraph{$\Rs_2(\crs,\st,\mathsf{psi}_2):$}  This algorithm is identical to the one described in Construction \ref{const:lpsi}, except that whenever $a_i\in\Ic$, compute $\mathsf{lab}_i=T_i\oplus \bar{\ct}_i$. Output $(\Ic,\{\mathsf{lab}_i\}_{i\in\Ic})$.
+\end{construction}
+
+
+
+
+\paragraph{Analysis.} We state the theorems that guarantee the required properties for our scheme. We omit the proofs since they are identical to the proofs of Theorems \ref{theor:correctPSI} and \ref{theor:securityPSI}
+
+\begin{theorem}
+\label{theor:correctLLPSI}
+The protocol presented in Construction \ref{const:llpsi} is correct.
+\end{theorem}
+
+\begin{theorem}
+\label{theor:secureLLPSI}
+The protocol presented in Construction \ref{const:llpsi} securely UC-realizes functionality $\Fc_\mathsf{rLPSI}$ in the $\Gc_\mathsf{CRS}$-hybrid model against:
+\begin{itemize}
+    \item a semi-honest receiver given that the $\phi$-hiding and the DCR assumptions hold;
+    \item a malicious sender, where security holds statistically.
+\end{itemize}
+\end{theorem}
+
+
+\subsection{Laconic Oblivious Transfer with Malicious Sender Security}
+\label{sec:lot}
+
+In this section, we present a new laconic oblivious transfer (LOT) scheme which is secure against the malicious sender. Besides, it only needs a small CRS and succinct messages for both rounds (as in \cite{C:GoyVusWat20}).
+
+\paragraph{Laconic oblivious transfer ideal functionality.} Let $\Gamma=\Gamma(\lambda)\in\NN$. The functionality $\Fc_{\ell\mathsf{OT}}$ works as follows: It receives a  database $D\in\bin^{\Gamma}$ from $\Rs$. Upon receiving a message $(i\in \NN, m_0,m_1,L\in [\Gamma])$ from the sender $\Ss$, $\Fc_{\ell\mathsf{OT}}$ sends $(i,m_{D_L})$ to $\Rs$ and ignores future messages with the same $i$ from $\Ss$.
+
+
+\paragraph{Protocol.} We now present the construction for sender-malicious LOT.
+
+\begin{construction}
+\label{cons:lot}
+Let $\Gamma=\Gamma(\lambda)$ be a polynomial in $\lambda$. Let 
+Let $\kappa\in\ZZ$ such that $5\kappa\leq \lambda$. Let
+\begin{itemize}
+    \item $\mathsf{PRF}:\Kc\times \Uc\to \mathsf{Primes}(\kappa)$ be a PRF which outputs prime numbers
+    \item $\mathcal{REDJ}_{\Delta}$ be the language defined in Section \ref{sec:rangeproofs} and   $\mathsf{NIZK}_{\mathcal{REDJ}_{\Delta}}=$\\* $(\mathsf{NIZK.GenCRS}_{\mathcal{REDJ}_{\Delta}},$ $\mathsf{NIZK.Prove}_{\mathcal{REDJ}_{\Delta}},\mathsf{NIZKVerify}_{\mathcal{REDJ}_{\Delta}})$ be a DV-NIZK for the language $\mathcal{REDJ}_{\Delta}$,  for some $\Delta=((g_0,g_1),B,N,\xi)$. 
+    \item $\mathsf{Ext}:\Sc\times \ZZ_{N^{\xi+1}}\to\bin^{2\lambda}$ be a $(\kappa-1,\negl[\lambda])$-strong extractor.
+\end{itemize}
+
+
+\paragraph{$\mathsf{GenCRS}(1^\lambda):$}
+This algorithm is identical to the one described in Construction \ref{const:lpsi}, except that it does not create a public key $\pk$. It outputs $\crs=(N,(g_0,g_1),B,k,\Delta)$ where $\Delta=((g_0,g_1),B,N,\xi)$. 
+\paragraph{$\mathsf{Hash}(\crs,D\in\bin^\Gamma):$}
+It computes $h=g_0^{r\prod_{i=1}^{\Gamma} e_{i,D_i}}\mod N^{\xi+1}$, where $r\sample [N/4]$ and $e_{i,b}\leftarrow\mathsf{PPRF}(k,2i+b)$ for $i\in[\Gamma]$ and $b\in\bin$, and computes $(\crs_1,\td_1)\leftarrow\mathsf{NIZK.GenCRS}_{\mathcal{ERDJ}_\Delta}(1^\lambda)$. It outputs $\mathsf{lot}_1=(h,\crs_1)$.
+
+\paragraph{$\mathsf{Send}(\crs,\mathsf{lot}_1,m_0,m_1,L):$}
+It computes $f_j=g_0^{\rho_j e_{L,j}}$, $F_j=g_1^{\rho_j e_{L,j}}(1+N))^{\rho_j e_{L,j}}$ for $j\in\bin$ where $\rho_j\sample [N/4]$ and $e_{L,j}\leftarrow\mathsf{PPRF}(k,2L+j)$, computes $\ct_j=k_j\oplus m_j $, where $k_j\leftarrow\mathsf{Ext}(s_j,h^{\rho_j})$, computes $\pi_j\gets\mathsf{NIZK.Prove}_{\mathcal{ERDJ}_\Delta}(\crs, x_j,w_j)$ where $x_j=(f_j,F_j)$ and $w_j=(\rho_j e_{L,j})$ It outputs $\mathsf{lot}_2=(\{f_{j},F_j,\ct_j,\pi_j,s_j\}_{j\in\bin},L)$.
+
+\paragraph{$\mathsf{Receive}(\crs,\mathsf{lot}_2,\st):$}
+It aborts if $0\gets\mathsf{NIZK.Verify}_{\mathcal{ERDJ}_\Delta}(\td,x_j, \pi_j)$ where $x_j=(f_j,F_j)$. It computes $k_{D_L}\gets\mathsf{Ext}(s_{D_L}, f_{D_L}^{r\prod_{i\neq L}e_{i,D_i}}\mod N^{\xi+1})$ , and outputs $m_{D_L}=\ct_{D_L}\oplus k_{D_L}$.
+
+\end{construction}
+
+\paragraph{Analysis.}
+
+ We state the theorems that guarantee the required properties for our scheme. 
+\begin{theorem}
+\label{theor:correctLOT}
+The protocol presented in Construction \ref{cons:lot} is correct.
+\end{theorem}
+ 
+ The proof of correctness essentially follows the same lines as the proof of Theorem \ref{theor:correctPSI}.
+
+\begin{theorem}
+\label{theor:securityLOT}
+The protocol presented in Construction \ref{cons:lot} securely UC-realizes functionality $\Fc_{\ell\mathsf{OT}}$ in the $\Gc_\mathsf{CRS}$-hybrid model against:
+\begin{itemize}
+    \item a semi-honest receiver given that the $\phi$-hiding and the DCR assumptions hold;
+    \item a malicious sender, where security holds statistically.
+\end{itemize}
+\end{theorem}
+\begin{proof}
+The proof of security against a semi-honest receiver is identical to the proof of Lemma \ref{lemma:SHreceiverLPSI}.
+
+We now sketch how to prove security against a malicious sender. The simulator works analogously to the simulator of Lemma \ref{lemmma:psi-mal-sender}, except that, in this case, the simulator knows the prime $e_{L,i}$ for both $i\in\bin$. Thus, the re-encryption step is not needed anymore since the simulator can easily extract $\rho_{i}$, for $i\in\bin$ by decrypting $(f_i, F_i)$ using $\phi(N)$ (which is well-formed and encrypting a value smaller than $N^2$ by the soundness of $\mathsf{NIZK}_{\mathcal{ERDJ}_\Delta}$) to recover a value $\zeta'_i$. From this value, it can compute $\rho_i=\zeta'_i/(e_{L,i} \phi(N))$. After recoreving $\rho_i$, it can compute the keys $k_i$ and extract the messages $m_i$.
+
+Indistinguishability between the simulated version and the real protocol follows the same blueprint as the proof of Lemma \ref{lemmma:psi-mal-sender}.
+\end{proof}
+
+
+%The proof of the Theorem follows the same blueprint as the proof of Theorem \ref{theor:securityPSI}, that is, $\mathsf{Sim_S}$ computes $\rho_j$ from $F_j^{\phi(N)}$ once it receives $\mathsf{lot}_2$, then recovers $m_0,m_1$ by using $k_j$ which generated from $\rho_j$ and the extractor.
+
+% \begin{enumerate}
+%     \item $\mathsf{Sim_S}$ generates the $\crs$ and keeps $\phi(N)$ to himself.
+%     \item $\mathsf{Sim_S}$ samples $h\sample \ZZ_{N^{\xi+1}}$ and computes $(\crs^\RPc,\td^\RPc)\gets\mathsf{NIZK.GenCRS}^\RPc(1^\lambda)$, sends $\mathsf{lot}_1:=(h,\crs)$ to the sender
+%     \item Once $\mathsf{Sim_S}$ receives $\mathsf{lot}_2$, it does the following:
+%      \begin{itemize}
+%         \item $\mathsf{NIZK.Verify}$
+%         \item computes $\rho_j e_{L,j}\phi(N)$ from $F_j^{\phi(N)}$ and recovers $\rho_j$ by dividing $e_{L,j}$ over $\ZZ_{N^\xi}$ and $\phi(N)$ over integers.
+%         %\textcolor{blue}{maybe dividing $\phi(N)$ over $\ZZ_{N^\xi}$}
+%         \item computes $k_j\gets \mathsf{Ext}(s_j,h^{\rho_j})$ to recover $m_0,m_1$ and send them to $\Fc_{\ell OT}$
+%     \end{itemize}
+% \end{enumerate}
+
+%Show real game is indistinguishable to the simulated one.
+
+%\paragraph{Hybrid $\mathcal{H}_0$.} real one
+%\paragraph{Hybrid $\mathcal{H}_1$.} $\mathsf{Sim_S}$ generates $\crs$ and then replace $h$.
+%\paragraph{Hybrid $\mathcal{H}_2$.} extract $\rho_j$ and thus $(m_0,m_1)$
+
+% \paragraph{$\mathsf{GenCRS}(1^\lambda):$}
+% \begin{itemize}
+%     \item Generate two prime numbers $p,q$ and compute $N=pq$. 
+%     Choose two generators $g_0,g_1\leftarrow\ZZ_{N}^*$. Choose $B_0$ and $\xi\in\ZZ$. Set $\beta=\beta(N)\in\omega(\log(N)).N$. \textcolor{red}{parameter missing}.
+%   \item Sample a pair of public and secret keys $(\pk,\sk)\leftarrow\mathsf{PKE.KeyGen}(1^\lambda)$.
+%     \item Create a PRF key $k\sample \bin^\lambda$ where the outputs of $\mathsf{PRF}(k,\cdot)$ are bounded by $B_0$. 
+%     \item Output $\crs=(\pk,(g_1,g_2),B_0,k,\beta)$.
+% \end{itemize}
+% \paragraph{$\Rs_1(\crs,S_\Rs):$}
+% \begin{itemize}
+%     \item Parse $\crs$ as $(\pk,(g_0,g_1),B_0,k,\beta)$, and $S_\Rs=\{a_i\}_{i\in M}$
+%     \item Compute the prime numbers $p_i\leftarrow \mathsf{PRF}(k,a_i)$, for all $i\in [M]$.
+%     \item Sample $r\sample Z_N\setminus \{0\}$ and compute $h=g_0^{r\prod_{i\in [M]} p_i}\mod N^{\xi+1}$.
+%     \item Run $\left(\crs^\RPc,\td^\RPc\right)\leftarrow\mathsf{NIZK.GenCRS}^\RPc_{(g_0,g_1),B_0}(1^\lambda)$.
+%     \item Output $\st=\left(r,\td^\RPc\right)$ and $\mathsf{psi}_1=\left(h,\crs^\RPc\right)$.
+% \end{itemize}
+
+
+% \paragraph{$\Ss(\crs,S_\Ss,\mathsf{psi}_1):$}
+% \begin{itemize}
+%     \item Parse $\crs$ as $(\pk,(g_0,g_1),B_0,k)$, $\mathsf{psi}_1$ as 
+% $\left(h,\crs^\RPc\right)$ and $S_\Ss$ as $\{b_i\}_{i\in [m]}$.
+% \item For $i\in \left[m\right]$ do the following: 
+% \begin{itemize}
+% \item Sample $\rho_i\sample D_\beta$. Compute the prime numbers $p_i\leftarrow\mathsf{PRF}(k,b_i)$.
+%  \item Sample an extractor seed $s_i\sample \bin^\lambda$ and compute $R_i=\mathsf{Ext}(s, d^{\rho_i})$
+
+% \item Compute $f_{0,i}=g_0^{\rho_ip_i}\mod N^{\xi+1}$, $f_{1,i}=g_1^{\rho_ip_i}(1+N)^{\rho_ip_i}\mod N^{\xi+1}$ and $\ct_i\leftarrow\mathsf{PKE.Enc}(\pk,b_i;R_i)$.
+% \item Compute $\pi_i^\RPc\leftarrow\mathsf{NIZK.Prove}_{(g_0,g_1),B_0}^\RPc(\crs^\RPc,x_i,w_i)$ where $x_i=(f_{0,i},f_{1,i})$ and $w_i=\rho_ip_i$.
+% \end{itemize}
+% \item Output $\mathsf{psi}_2=\left\{(f_{0,i},f_{1,i}),\ct_i,s_i,\pi_i^\RPc\right\}_{i\in [m]}$.
+% \end{itemize}
+
+% \paragraph{$\Rs_2(\crs,\st,\mathsf{psi}_2):$}
+% \begin{itemize}
+%     \item Parse $\st$ as $(r,\td^\RPc)$ and $\mathsf{psi}_2$ as $\left\{(f_{0,i},f_{1,i}),\ct_i,s_i,\pi^\RPc_i\right\}_{i\in [m]}$.  Set $\Ic=\emptyset$
+%     \item For all $j\in [m]$ do the following: \begin{itemize}
+%         \item If $0\leftarrow\mathsf{NIZK.Verify}^\RPc_{(g_0,g_1),B_0}(\td^\RPc,x_j,\pi^\RPc_j)$ where $x_j=(f_{0,j},f_{0,j})$, abort the protocol.
+%         \item If there is a $i\in [M]$ such that $$\ct_j=\mathsf{PKE.Enc}(\pk,a_i;R'_i)$$ where $R_i'=\mathsf{Ext}(s_j,f_{0,j}^{r_i})$ and $r_i={r \displaystyle\prod_{
+%          \ell=1,
+%         \ell\neq i
+%      }^M p_\ell}$, then add the element $a_i$ to $\Ic$. %$\Ic=\Ic\cup \{a_i\}$.
+%     \end{itemize} 
+%  \item Output $\Ic$.
+
+
+\section{Self-Detecting Encryption}
+
+In this section, we define self-detecting encryption and show how to build it from laconic PSI. We first give a semi-honest definition and will present the malicious definition in the full paper \cite{EPRINT:2021:728}.
+
+\begin{definition} A Self-Detecting Encryption (SDE) scheme is a tuple of (randomized) algorithms $\SDE = (\Glo, \Gen, \Hash, \Enc, \Dec, \Det)$ such that:
+	
+\begin{itemize}
+		\item $\Glo(1^\secpar)$: Takes as input a security parameter $1^\secpar$, and outputs a public parameter $\pp$.
+		
+		\item $\Gen(\pp)$: Takes as input a public parameter $\pp$, and outputs a pair of keys $(\pk, \sk)$.
+		
+		\item $\Hash(\pp, \DB)$: Takes as input a public parameter $\pp$ and a database $\DB$, and outputs a hash value $\hsh$ and a private state $\st$. We require $|\hsh| \leq \poly[\secpar]$, for a fixed polynomial $\poly[]$. 
+		
+		\item $\Enc(\pk, \hsh, \msg)$: Takes as input a public key $\pk$, a hash value $\hsh$, and a message $\msg$, and outputs a ciphertext $\ct$.
+		
+		\item $\Dec(\sk , \ct)$: Takes as input a secret key $\sk$ and a ciphertext $\ct$, and outputs a message $\msg$ or $\bot$.
+		
+		\item $\Det(\st, \ct)$: Takes as input a private state $\st$ and a ciphertext $\ct$, and outputs a message $\msg$ or $\bot$.
+\end{itemize}
+
+We require the following properties:
+
+\begin{itemize}
+    \item \textbf{Correctness.} 
+    For any message $\msg$, letting $\pp \pick \Glo(1^{\secpar})$ and $(\pk, \sk) \pick \Gen(\pp)$: $\Pr[\Dec(\sk, \Enc(\pk, \msg)) \neq \msg] \leq \negl[\lambda]$.
+
+\item \textbf{Detection.} For any $\pp \in \Glo$, any $(\pk, \sk) \in \Gen(1^{\lambda})$, any database of strings $\DB$, and any message $\msg$, letting $(\hsh, \st) \pick \Hash(\pp, \DB)$ and $\ct \pick \Enc(\pk, \hsh, \msg)$, if $\msg \in \DB$ then $\Det(\st, \ct) = \msg$.
+
+\item \textbf{Efficiency.} The size of $h$ and running time of $\Enc$ are independent of the database size.  There exists a polynomial $\poly[]$ s.t. for all $n := n(\secpar)$, any $\DB \in \bits^n$, letting $h \pick \Hash(\pp, \DB)$ and $\pp, \pk$ be as above, then $|h| \leq \poly[\secpar]$ and also the running time of $\Enc(\pk, \hsh , \msg)$ is upper bounded by $\poly[|\msg|, \secpar]$. 
+
+\item \textbf{Database Hiding.} For any two databases $(\DB_0, \DB_1)$ of equal size, if $(\hsh_0, *) \pick \Hash(\pp, \DB_0)$ and $(\hsh_1, *) \pick \Hash(\pp, \DB_1)$ then $\hsh_0$ and $\hsh_1$ are indistinguishable where $\pp \pick \Gen(1^{\secpar})$.
+
+\item \textbf{Semantic Security.} 
+For any database of strings $\DB$ and any two messages $(\msg_0, \msg_1)$: $(\pk, \hsh, \Enc(\pk, \hsh, m_0)) \comp  (\pk, \hsh, \Enc(\pk, \hsh, m_1))$, where all the variables are sampled as above.
+
+	
+\item \textbf{Security Against the Authority.} For any two messages $(\msg_0, \msg_1)$, if $\msg_0 \notin \DB$ and $\msg_1 \notin \DB$ then  
+\[\big(\pk, (\hsh, \st), \Enc(\pk, \hsh, m_0)) \comp  (\pk, (\hsh, \st), \Enc(\pk, \hsh, m_1)\big),\]
+where $\pp \pick \Glo(1^\secpar)$, $(\pk, \sk) \pick \Gen(\pp)$, and $(\hsh, \st) \pick \Hash(\pp, \DB)$.
+
+\end{itemize}
+\end{definition}
+
+
+We now show how to realize self-detecting encryption from  semi-honest laconic PSI. Informally, the SDE hash is the receiver's first-round laconic PSI message, and the encryption of a message $m$ consists of a PKE encryption of $m$ as well as a second-round PSI message based on $m$. 
+
+\begin{construction}
+ Let $\mathsf{PKE}= (\mathsf{KeyGen}', \enc', \dec')$ be a CPA-secure PKE scheme\footnote{We proceed with an independent PKE scheme for the sake of simplicity.} and $\mathsf{LPSI}=(\gencrs, \Rs_1,  \Ss, \Rs_2)$ a laconic PSI. 
+ \begin{itemize}
+     \item {$\Glo(1^{\lambda})$:}  Sample $\crs \pick \mathsf{LPSI}.\gencrs(1^{\lambda})$, and let $\pp := \crs$.
+     \item {$\Gen(\pp)$:}  Run $\mathsf{PKE}.\Gen'(1^{\lambda})$ to generate a pair of keys $(\pk, \sk)$. 
+     \item {$\Hash(\pp, \DB)$:} Let $\hsh$ be the output of the receiver on $\DB$ and $\pp$, i.e., $\hsh \pick \mathsf{LPSI}.\Rs_1(\pp, \DB)$. In addition, let $\st$ be the private state of the receiver.
+     \item {$\Enc(\pk, \hsh, \msg)$:}  Output $(\ct_1, \ct_2)$, where  $\ct_1 \pick \mathsf{PKE}.\enc'(\pk, \msg)$ and  $\ct_2 \pick\mathsf{LPSI}. \Ss(\pp,\{\msg\}, \hsh)$.
+     \item {$\Dec(\sk, \ct = (\ct_1, \ct_2))$:}  Output $\mathsf{PKE}.\Dec'(\sk, \ct_1)$.
+     \item {$\Det(\st, \ct = (\ct_1, \ct_2))$:} Output $\Rs_2(\st, \ct_2)$.
+ \end{itemize}
+\end{construction}
+
+
+
+Correctness and efficiency follow immediately. 
+\begin{itemize}
+	\item \textbf{Statistical} database hiding  follows  from  PSI-receiver statistical security.
+	
+	\item Semantic security and security against the authority property of the scheme follows from the CPA security of PKE scheme $\Pi$ and the sender's security. Observe that if $\msg \notin \DB$ then both $\ct_1$ and $\ct_2$ computationally hide the message even in the presence of the private state $\st$ of PSI. Specifically, one can argue that $\ct_1$ computationally hides $\msg$ because of the CPA security of PKE scheme $\Pi$, and $\ct_2$ computationally hides $\msg$ because of the sender's security of laconic PSI. The arguments above can be made formal via a routine hybrid argument, and we omit the details.
+\end{itemize}
+
+
+\subsection{Maliciously Secure Self-Detecting Encryption}
+\label{subsec:malsde}
+
+
+Next, we provide a definition of self-detecting encryption in the malicious setting. In this setting, the algorithm $\Glo$ provides a trapdoor which allows a server to ensure that the ciphertexts sent on the channel can be verified while ensuring the privacy of users. We remark that the trapdoor is only known for the server (and is not included in the user's secret key).\footnote{Notice that in the malicious setting, there are three entities (user, server, and the authority) with their own secret key/state.} Clearly, as in the semi-honest setting, the authority would only be able to detect illegal content by looking at the ciphertexts communicated through the channel, and no information will be leaked about normal/legal messages.
+
+Specifically, a maliciously secure self-detecting encryption is a tuple of seven (randomized) algorithms $\SDE = (\Glo, \Gen, \Hash, \Enc, \Dec, \Det, \Verify)$ such that $\Glo$ outputs a trapdoor $\td$ (along with $\pp$) such that the verification algorithm $\Verify$ checks well-formedness of ciphertext using $\td$ as follows:
+
+\begin{itemize}
+	\item $\Verify(\td, \ct)$: Takes a trapdoor $\td$ and a ciphertext $\ct$ and it outputs 1 or 0.
+\end{itemize} 
+
+The other five algorithms, namely $(\Gen, \Hash, \Enc, \Dec, \Det)$, have the same functionality as in the semi-honest setting. We require that $\SDE$ should satisfy all the properties of a semi-honest encryption scheme (correctness, efficiency, database hiding, semantic security, and security against the authority), along with the following well-formedness property:  for any PPT adversary $\mathcal{A}$ and database $\DB$, if $(\pp, \td) \pick \Glo(1^\secpar)$, $(\pk, *) \pick \Gen(\pp)$, $(\hsh, *) \pick \Hash(\pp, \DB)$ then the following holds for any adversarially generated ciphertext $\ct \pick \mathcal{A}^{\Verify(\td, .)}(\pp, \pk, \hsh)$ with overwhelming probability (where $\mathcal{A}$ has oracle access to the verification algorithm): 
+
+\begin{itemize}
+ 	\item If $\Verify(\td, \ct ) = 1$ and $\Dec(\sk, \ct) \in \DB$ then $\Dec(\sk, \ct) = \Det(\st, \ct)$.
+	
+ 	\item If $\Verify(\td, \ct ) = 1$ and $\Dec(\sk, \ct) \notin \DB$ then $\Det(\st, \ct) = \bot$.
+ \end{itemize}
+
+ Given a maliciously secure laconic PSI and a DV-NIZK for a specific language, one can construct a maliciously secure SDE following the same blueprint that we provided in the semi-honest setting.
+ \begin{construction}
+ 
+ Let $\mathsf{PKE} = (\Gen', \enc', \dec')$ be a CPA-secure public-key encryption scheme, and let $\mathsf{NIZK}=(\mathsf{NIZK.GenCRS}, \mathsf{NIZK.Prove}, \mathsf{NIZK.Verify})$ be a DV-NIZK for ``message-equality" language (described below). 
+ \begin{itemize}
+     \item  $\Glo(1^{\lambda})$:  Sample $(\crs_{N}, \td) \pick \mathsf{NIZK.GenCRS}(1^\secpar)$ and $\crs_L \pick \mathsf{LPSI}.\gencrs(1^{\secpar})$, and let $\pp = (\crs_N, \crs_{L})$. 
+     \item {$\Gen(\pp)$:}  Sample  a pair of keys $(\pk', \sk') \pick \mathsf{PKE}.\Gen'(1^{\lambda})$. Set $\pk = (\pk', \crs_N, \crs_L)$ and $\sk = \sk'$. 
+     \item {$\Hash(\pp, \DB)$:}  Parse $\pp = (\crs_N, \crs_{L})$. Output  $(\hsh, \st) \pick \mathsf{LPSI}.\Rs_1(\crs_L, \DB)$. 
+     \item {$\Enc(\pk, \hsh, \msg)$:}  Parse $\pk = (\pk', \crs_L, \crs)$. Let $\ct_1 \pick \mathsf{PKE}.\enc'(\pk', \msg)$ and  $\ct_2 \pick\mathsf{LPSI}. \Ss(\crs_L,\{\msg\}, \hsh)$.
+     
+ 	Compute proof for the statement that the messages underlying $\ct_1$ and $\ct_2$ are equal. Specifically, consider the following language $\mathcal{L}$ (parameterized by $\Delta$):
+ 	\[\mathcal{L}_{\Delta} = \{(\ct_1, \ct_2): \exists (\msg, r, r') \mbox{ s.t. } \ct_1 = \mathsf{PKE}.\enc'(\pk', \msg; r')  \wedge \ct_2 = \mathsf{LPSI}. \Ss(\crs_L,\{\msg\}, \hsh; r) \},\]
+ 	where $\Delta = (\pk', \crs_L, \hsh)$. In addition, $r$ and $r'$ are the random coins used by $\mathsf{PKE}.\enc'$ and $\mathsf{LPSI}. \Ss$, respectively. Generate a proof $\pi \pick \mathsf{NIZK.Verify}(\crs_N, \ct_1, \ct_2)$, and set $\ct_3 := \pi$. Finally, publish $\ct = (\ct_1, \ct_2, \ct_3)$ as the ciphertext. 
+
+ 	\item {$\Verify(\td, \ct)$} : Run $\mathsf{NIZK.Verify}$ on $\td$ and $\ct$, and output the resulting bit.
+ 	\item {$\Dec(\sk, \ct = (\ct_1, \ct_2, \ct_3))$:}  Output $\mathsf{PKE}.\Dec'(\sk', \ct_1)$.
+ 	\item {$\Det(\st, \ct = (\ct_1, \ct_2, \ct_3))$:}  Output $\mathsf{LPSI}.\Rs_2(\st, \ct_2)$.
+	
+ \end{itemize}
+ \end{construction}
+
+Correctness, efficiency, database hiding, semantic security, and security against the authority of the scheme can be argued in a similar fashion to the semi-honest setting. The additional requirement, namely the well-formedness property of the scheme essentially follows from the security of DV-NIZK. Observe that for a maliciously generated ciphertext $\ct = (\ct_1, \ct_2, \ct_3)$, the messages hidden by $\ct_1$ and $\ct_2$ are not equal, and hence the ciphertext $\ct$ will be rejected by the verification algorithm of DV-NIZK. We leave a black-box construction of DV-NIZK (for the message-equality language above) from concrete cryptographic assumptions to future work.

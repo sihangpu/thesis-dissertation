@@ -1,0 +1,8 @@
+%!TEX root = ../dissertation.tex
+\chapter{Conclusion}
+\label{conclusion}
+This thesis is centred around enhancing efficiency and reducing the costs of communication and computation for commonly used privacy-preserving primitives, including private set intersection, oblivious transfer, and stealth signatures. Specifically,
+In \cref{sec:threshpsi}, we present a protocol of multiparty threshold private set intersection, which improves communication bandwidth from $\tilde{O}(N^2t^2)$ to $\tilde{O}(Nt^2)$ where $N$ is the number of parties and $t$ the threshold while retaining the same computational overhead and security level.
+In \cref{sec:laconicpsi}, we introduce a new primitive, laconic private set intersection, which solves unbalanced PSI in a non-interactive way while making communication bandwidth as succinct as possible. Specifically, after the server publishes a short digest of constant size, any client can non-interactively send its message of size independent of the server's dataset.
+In \cref{sec:r1ot}, we present a two-message oblivious transfer protocol which has asymptotically minimum communicational bandwidth, namely, to transfer $n$ bits information, it only requires $n(1+o(1))$ bits bandwidth for each user while retaining computational efficiency. We also show how to efficiently emulate $\ZZ_2$ inside a prime-order group $\ZZ_p$ in a function-private manner.
+In \cref{sec:ssig}, we present a post-quantum privacy-preserving signature called stealth signature that saves ~$70\%$ bandwidth compared to the state of the art while  achieving the strongest security. Additionally, we present a fuzzy variant which protects users' metadata and improves the server's computational work from $O(N)$ to $O(\sqrt{N})$ where $N$ is the number of users.

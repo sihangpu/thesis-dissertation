@@ -1,0 +1,1652 @@
+%!TEX root = ../dissertation.tex
+\begin{savequote}[75mm]
+Nulla facilisi. 
+\qauthor{Quoteauthor Lastname}
+\end{savequote}
+
+\chapter{Rate-1 Oblivious Transfer}
+\label{sec:r1ot}
+\newthought{In this chapter}, we start by addressing the third problem related to privacy-preserving computation, which involves the communication bandwidth of a fundamental cryptographic primitive known as oblivious transfer (OT) which we will recall in~\cref{sec:overview-r1ot}.
+
+In particular, we show that it is possible
+to perform $n$ independent copies of $1$-out-of-$2$ oblivious transfer in two messages, where the communication complexity of the receiver and sender (each) is $n(1+o(1))$ for sufficiently large $n$. Note that this matches the information-theoretic lower bound. Prior to this thesis, this was only achievable by using the heavy machinery of rate-$1$ fully homomorphic encryption (Rate-$1$ FHE\cite{TCC:BDGM19}). 
+
+To achieve rate-$1$ both on the receiver's and sender's end, we use the LPN assumption, with slightly sub-constant noise rate $1/m^{\epsilon}$ for any $\epsilon>0$ together with either the DDH, QR or LWE assumptions\footnote{Similar as before, these hardness assumptions are recalled in~\cref{sec:prelim}.}. In terms of efficiency, our protocols only rely on linear homomorphism, as opposed to the FHE-based solution which inherently requires an expensive ``bootstrapping'' operation. We believe that in terms of efficiency, we compare favourably to existing batch-OT protocols while achieving superior communication complexity. We show similar results for Oblivious Linear Evaluation (OLE).
+
+For our DDH-based solution, we develop a new technique that may be of independent interest. We show that it is possible to ``emulate'' the binary group $\ZZ_2$ (or any other small-order group) inside a prime-order group $\ZZ_p$ \emph{in a function-private manner}. That is, $\ZZ_2$ operations are mapped to $\ZZ_p$ operations such that the outcome of the latter does not reveal additional information beyond the $\ZZ_2$ outcome. Our encoding technique uses the discrete Gaussian distribution, which to our knowledge was not done before in the context of DDH.
+
+
+\section{Overview}
+\label{sec:overview-r1ot}
+Oblivious Transfer (OT) \cite{RabinOT,C:EveGolLem82} is one of the most basic cryptographic primitives. In the simple $1$-out-of-$2$ OT, a receiver holds a bit $b \in \bits$ and a sender holds two bits $x_0, x_1$. At the end of the protocol, the receiver should learn $x_b$, but nothing about $x_{1-b}$, and the sender should learn nothing about the value of $b$. In most applications, one OT is not enough and one is required to perform many OT operations in parallel. We let $n$ denote the number of parallel executions. Various techniques have been developed to address this task of \emph{batch-OT} \cite{C:IKNP03,C:BCGIKS19,CCS:BCGIKRS19}.
+
+For the most part, they involve a preprocessing ``offline'' phase where the parties generate random OT correlations.\footnote{That is, a protocol in which the receiver obtains $b, x_b$ and the sender obtains $x_0,x_1$, where $b, x_0, x_1$ are all (pseudo-)randomly sampled.} Given such correlations, executing the OT protocol in the so-called ``online phase'' is computationally very simple. This approach is very useful for purposes of computational efficiency since the offline phase can be carried out even before the actual inputs of the computation are known. However, in terms of communication complexity, there is an inherent cost, even just in the online phase, of $n$ receiver bits and $2n$ sender bits. In contrast, the insecure implementation only requires $n$ bits to be sent from each party in a two-message protocol: the receiver sends its input, and the sender returns all of the appropriate $x_b$ values. As always in cryptography, we wish to understand what is the ``cost of privacy'', namely can we approach the information-theoretic minimum without losing privacy. Note that we can only hope to achieve this for a sufficiently large $n$, due to the security parameter overhead.\footnote{In more detail, since $2$-message OT implies a public-key encryption scheme, the messages must have a length that relates to the security parameter of the underlying computation assumption. This is the case even for single-bit OT.}
+
+In prior work, D\"{o}ttling et al.~\cite{C:DGIMMO19} showed that if the same receiver bit is used for multiple OT instances, then the sender's response can be compressed to $n(1+o(1))$, achieving an optimal amortized rate. This was shown under a variety of computational assumptions: Decisional Diffie-Hellman (DDH), Quadratic Residuosity (QR), or Learning with Errors (LWE). It was also shown by Brakerski et al.~\cite{TCC:BDGM19} and by Gentry and Halevi \cite{TCC:GenHal19} that fully homomorphic encryption (FHE) can achieve optimal communication complexity, which in particular implies that under the LWE assumption, optimal rate batch-OT is achievable. However, the FHE-based protocol inherently requires the use of a computationally exorbitant ``bootstrapping'' mechanism in order to compress the receiver's message.
+
+
+
+\subsection{Our Contribution}
+
+We show that optimal-rate\footnote{Achieving optimal rate (or any rate above 1/2) seems to involve a ``phase-transition'' and should be viewed as more than a ``constant factor'' improvement. For example, OT beyond this threshold implies the existence of lossy trapdoor functions (see discussion in \cite{C:DGIMMO19}, Section 6.3). Therefore one could expect such a protocol to inherently be heavier on public-key operations.} batch-OT can be achieved from various computational assumptions, and without giving up on computational efficiency. In particular, we require the LPN assumption with a small-inverse-polynomial noise\footnote{This is still a regime where LPN alone is not known to imply public-key encryption.}, in addition to one of the assumptions DDH, QR or LWE. In terms of computational cost, our protocol does not require heavy operations such as bootstrapping and relies on linear homomorphism only. We believe that in terms of overall cost, it compares favourably even with random-OT-based methods. 
+All of our results are in the semi-honest (honest-but-curious) setting.
+
+
+
+We further extend our results to the task of Oblivious Linear Evaluation (OLE) \cite{TCC:IshPraSah09,C:CDIKLOV19,AC:GhoNieNil17,PKC:BraDotMat22}, where the sender holds a linear function over a ring and the receiver holds an input for the function, and we wish for the receiver to learn the output on its input and nothing more, and the sender learns nothing as usual. OLE has been shown to be useful in various settings \cite{goldreich2019play,C:CDIKLOV19}.
+
+Our techniques rely primarily on linear homomorphism, namely on the ability to evaluate linear functions on encrypted data (see Section~\ref{sec:technicalOverview} below). We require a linearly homomorphic scheme over $\ZZ_2$ (more generally $\ZZ_q$ for OLE) where the evaluation is \emph{function-private}. Namely, the output ciphertext should not reveal any information about the linear function that was evaluated. This was not known to be achievable from DDH prior to this thesis, and we introduce a new technique that we believe may be of independent interest. The reason for this is that DDH works ``natively'' over the group $\ZZ_p$ where $p$ is a super-polynomially large prime. Furthermore, we only have access to the $\ZZ_p$ elements in the exponent of a group generator $g$. Indeed, one can encode $0 \to g^0$, $1 \to g^1$, and linear $\ZZ_2$ homomorphism will follow in the sense that after applying a linear function in the exponent, we obtain $g^x$, where $x \pmod{2}$ is the desired $\ZZ_2$ output. This creates two obstacles: first, we need to be able to efficiently map $g^x \to x$, which means that $x$ must come from a polynomially-bounded domain, and second that recovering $x$ reveals more information than just $x \pmod{2}$. We develop a new method to resolve this issue using \emph{discrete Gaussian variables}. A technique that was used in the context of the LWE assumption but to the best of our knowledge not for DDH. We view this as an additional contribution to this thesis, which may find additional applications. In particular, we show that it can be used to enhance the key-dependent-message security properties of the well-known encryption scheme \cite{C:BHHO08}.
+
+For more details on all of our contributions, see the technical overview in Section~\ref{sec:technicalOverview}.
+
+
+
+\subsection{Related Work}
+
+The communication complexity of OT has been extensively studied throughout the decades. Here we present a brief overlook of previous works.
+
+
+
+\paragraph{OT from Pseudorandom Correlations.} A recent line of research studies the feasibility of efficiently extending OTs in a \emph{silent} manner \cite{C:BCGIKS19,CCS:BCGIKRS19}.
+In these works, a setup phase is performed to distribute some \emph{shares} between the parties. These shares can later be expanded into random OT correlations. In the most efficient scheme \cite{CCS:BCGIKRS19} the setup phase can be performed in just two rounds assuming just a pseudorandom generator and an OT scheme. Using this scheme for performing the setup together with the standard transformations from random OT to chosen-input OT, \cite{CCS:BCGIKRS19} shows that $n$ independent instances of OT for $s$-bit strings  can be performed with communication complexity $(2s+1)n+o(n)$. For bit OT, this yields a communication complexity $3n+o(n)$ bits.
+
+\paragraph{Download rate-1 OT.} We say that an OT protocol has a download rate-1 if the rate of the sender's message is asymptotically close to 1. OT protocols with download rate 1 were presented in \cite{C:DGIMMO19,TCC:GarHajOst20,TCC:CGHLM21}.%,EPRINT:ADDHMO21}.  
+However, these protocols do not achieve an upload rate-1, that is, the rate of the receiver's message is far from being 1. Moreover, it is not clear how we can extend these protocols to achieve upload rate 1.
+
+
+\paragraph{Using rate-1 FHE.} As mentioned before, optimal-rate OT can be achieved using the recent scheme for rate-1 fully homomorphic encryption (FHE) of \cite{TCC:BDGM19,TCC:GenHal19} together with (semi-honest) circuit-privacy techniques for FHE (e.g. \cite{C:BdMW16}). However, this can only be instantiated using LWE. 
+
+
+\paragraph{Laconic OT.} Laconic OT \cite{C:CDGGMP17,FOCS:QuaWeeWic18,C:GoyVusWat20,TCC:ABDGHP21} is a flavour of two-round OT where the first message sent by the receiver is sublinear (ideally polylogarithmically) in the size of its input. However, by a simple information-theoretical argument, the sender's message has a size at least as large as the size of the sender's input. Note that, if this is not the case, then we would have an OT protocol with asymptotically better communication than an insecure OT protocol.
+
+\section{Techniques}
+\label{sec:technicalOverview}
+
+\subsection{Oblivious Transfer from Homomorphic Encryption}
+
+Our starting point is a textbook construction of oblivious transfer from simple homomorphic encryption schemes, such as ElGamal. For a cryptographic group $\GG = \langle g \rangle$ of prime order $p$, recall that an ElGamal public key is of the form $\pk = (g,h = g^x) \in \GG^2$, where $x \pick \ZZ_p$ is the secret key. Ciphertexts are of the form $c = (c_1,c_2) = (g^r,h^r \cdot g^b)$, where $r \pick \ZZ_p$ is uniformly random and $b \in \bin$ is the encrypted message. Given such a ciphertext $c$, the public key $\pk$ and two bits $m_0,m_1 \in \bin$, anyone can homomorphically compute a new ciphertext $c'$ which is distributed identically to fresh encryption of $m_b$, by \emph{homomorphically evaluating} the linear function $f(x) = (1-x) \cdot m_0 + x \cdot m_1 = (m_1 - m_0) \cdot x + m_0$ on the ciphertext $c$ and rerandomizing the resulting ciphertext. Note that if $b \in \bin$ is a bit, then it holds that $f(b) = m_b$. This homomorphic evaluation can be achieved by computing
+\begin{align*}
+    c_1' &\gets g^{r^\ast} \cdot c_1^{m_1 - m_0}\\
+    c_2' &\gets h^{r^\ast} \cdot c_2^{m_1 - m_0} \cdot g^{m_0},
+\end{align*}
+where $r^\ast \pick \ZZ_p$ is chosen uniformly random. Note that it holds that
+\begin{align*}
+c_1' &= g^{r^\ast + r \cdot (m_1 - m_0)}\\
+c_2' &= h^{r^\ast + r \cdot (m_1 - m_0)} \cdot g^{(m_1 - m_0) \cdot b + m_0} = h^{r^\ast + r \cdot (m_1 - m_0)} \cdot g^{m_b}.
+\end{align*}
+Since $r^\ast \pick \ZZ_p$ is chosen uniformly random, it holds that $r' = r^\ast + r \cdot (m_1 - m_0)$ is distributed uniformly random and we can conclude that $c' = (c_1',c_2')$ is distributed identical to a fresh encryption of $m_b$. Since $c'$ does not reveal more than the function value $f(b) = m_b$, we call the above homomorphic evaluation procedure to function private.
+
+This immediately implies an OT protocol: An OT-receiver holding a choice-bit $b \in \bin$ generates a pair $(\pk,\sk)$ of ElGamal public and secret keys, encrypts the bit $b$ under $\pk$ and sends the resulting ciphertext to the OT-sender. The OT-sender, holding messages $m_0,m_1$, homomorphically computes a ciphertext $c'$ encrypting $m_b$ and sends $c'$ back to the OT-receiver, who decrypts $c'$ to $m_b$. 
+Security against semi-honest senders follows from the IND-CPA security of ElGamal, whereas security against semi-honest receivers follows from the function privacy property established above.
+
+\subsection{Download-Rate Optimal String OT}
+While the above OT protocol is simple and efficient, it suffers from a very poor communication rate. While the receiver's message encrypts just a single bit, he needs to send 4 group elements, whereas the sender sends 2 group elements, each of size $\poly$.
+
+Döttling et al.~\cite{C:DGIMMO19} proposed a compression technique for \emph{batched ElGamal ciphertexts} based on the share-conversion technique of~\cite{C:BoyGilIsh16}. A batched ElGamal ciphertext is of the form $\mathbf{c} = (c_0,c_1,\dots,c_\ell) = (g^r,h_1^r \cdot g^{b_1},\dots,h_\ell^r \cdot g^{b_\ell})$, where $\pk = (g,h_1,\dots,h_\ell)$ is the corresponding public key and $\sk = (s_1,\dots,s_\ell)$ with $h_i = g^{s_i}$ is the secret key. The compression technique of~\cite{C:DGIMMO19} keeps $c_0$ and compresses each of the $c_1,\dots,c_\ell$ into just a single bit. The idea is instead of sending each $c_i \in \GG$ (for $i \geq 1$) in full, to first compute the distance $d$ to the next pseudorandom \emph{break-point} in $\GG$, and then only send its parity $d \mod 2$. The break points $\mathcal{P} \subseteq \GG$ are the set of all points $h \in \GG$ satisfying $\PRF_K(h) = 0^t$, where $\PRF: \GG \to \bin^t$ is a pseudorandom function with a range of size $2^t = \poly$. Thus, the distance $d = d(c_i)$ of a group element $c_i$ to the nearest breakpoint is the smallest non-negative $d$ such that $c_i \cdot g^d \in \mathcal{P}$. Given that neither $c_i$ nor $c_i \cdot g^{-1}$ is a breakpoint, we can recover the bit $b_i$ from $c_0 = g^r$, $\beta_ =  d(c_i) \mod 2$ and the secret key component $s_i$. It was shown in~\cite{TCC:BBDGM20} that for a given ciphertext $c = (c_0,c_1,\dots,c_\ell)$, the PRF-key $K$ can be (efficiently) chosen such that all $c_i$ are good, in the sense that neither $c_i$ nor $c_i \cdot g^{-1}$ is a breakpoint. This ensures that a receiver can recover the $b_1,\dots,b_\ell$ from $c' = (K,c_0,\beta_1,\dots,\beta_\ell)$, where $\beta_i = d(c_i) \mod 2$. Since all the $\beta_i$ are bits, such a compressed ciphertext only has additive size-overhead consisting of $K,c_0$. For a sufficiently large $\ell$, this fixed overhead becomes insignificant and the ciphertext rate approaches 1.
+
+The compressed batched ElGamal we've outlined leads to a batch bit-oblivious transfer protocol with \emph{download-rate 1}: The receiver generates a key-pair $\pk,\sk$ for batched ElGamal, and encrypts his choice-bits $b_1,\dots,b_\ell$ into
+$$\mathbf{c}_1 = \enc_\pk(b_1,0,\dots,0),\dots,\mathbf{c}_\ell =\enc_\pk(0,\dots,0,b_\ell),$$
+i.e. $\mathbf{c}^{(i)}$ encrypts a vector which is $b_i$ in index $i$ and $0$ everywhere else. The OT-receiver now sends $\pk,\mathbf{c}_1,\dots,\mathbf{c}_\ell$ to the OT-sender, whose input are messages $(m_{1,0},m_{1,1}),\dots,(m_{\ell,0},m_{\ell,1})$. Using circuit private homomorphic evaluation, the sender computes ciphertexts $\mathbf{c}'_1,\dots,\mathbf{c}'_\ell$ encrypting $(m_{1,b_1},0,\dots,0),$ $\dots,$ $(0,\dots,0,m_{\ell,b_\ell})$. Homomorphically computing the sum of the ciphertexts $\mathbf{c}'_1,\dots,\mathbf{c}'_\ell$, we obtain a ciphertext $\mathbf{c}'$ encrypting $(m_{1,b_1},\dots,m_{\ell,b_\ell})$. Finally, compressing $\mathbf{c}'$ with the compression technique outlined above we obtain a compressed ciphertext $\bar{\mathbf{c}} = (K,c_0,\beta_1,\dots,\beta_\ell)$ which the OT-sender sends back to the OT-receiver, who can decrypt $(m_{1,b_1},\dots,m_{\ell,b_\ell})$.
+
+Note that the size of the sender's message $\bar{\mathbf{c}}$ in this batch OT-protocol is $\poly + \ell$, which means that the \emph{amortized communication cost} per bit-OT approaches 1 bit, and is therefore asymptotically optimal. Even in terms of concrete complexity, this seems hard to beat, as the only additional information sent by the sender are the PRF key $K$ and the ciphertext header $c_0$.
+
+However, in terms of the upload rate, i.e. in terms of the size of the receiver's message, this protocol performs poorly. Specifically, to encrypt $\ell$ bits $b_1,\dots,b_\ell$, the receiver needs to send ciphertexts $\mathbf{c}_1,\dots,\mathbf{c}_\ell$ of total size $\ell^2 \cdot \poly$, which has a worse dependence on $\ell$ than just repeating the simple protocol from the last paragraph $\ell$ times.
+
+Clearly, we need a mechanism to compress the receiver's message. Applying the same ElGamal compression technique for the sender's message quickly runs into problems: Once an ElGamal ciphertext is compressed, the scheme loses its homomorphic capabilities, i.e. we cannot perform any further homomorphic operations on compressed ciphertexts and currently we don't know if it is possible to publicly \emph{decompress} such ciphertexts into ``regular'' ElGamal ciphertexts. 
+
+\subsection{Our Approach: Recrypting the Receiver's Message}
+
+Instead, our approach will be to encrypt the receiver's message under a different encryption scheme, specifically one which achieves a ciphertext rate approaching 1 but at the same time can be decrypted by the homomorphic capabilities of batched ElGamal. Specifically, the decryption procedure of this encryption scheme should be a linear function in the secret key. We can get an encryption scheme which almost fulfills these requirements from the Learning Parity with Noise (LPN) assumption. The LPN assumption states that for a random $m \times n$ matrix $\vc{A} \pick \ZZ_2^{m \times n}$, a random vector $\vc{s} \pick \ZZ_2^n$ and a $\rho$-Bernoulli distributed~\footnote{i.e. every component of $e_i$ of $\vc{e}$ is independently $0$ with probability $1 - \rho$ and $1$ with probability $\rho$} $\vc{e} \in \ZZ_2^m$, it holds that
+\[
+(\vc{A},\vc{A}\vc{s} + \vc{e}) \approx_c (\vc{A},\vc{u}),
+\]
+where $\vc{u} \pick \ZZ_2^m$ is chosen uniformly at random. This gives rise to the following simple symmetric-key encryption scheme with \emph{approximate correctness}: Assume that $\vc{A}$ is a fixed public parameter, the secret key is a uniformly random $\vc{s} \pick \ZZ_2^n$. To encrypt a message $m \in \ZZ_2^m$, we compute a ciphertext $\vc{d} \gets \vc{A}\vc{s} + \vc{e} + \vc{m}$, where $\vc{e} \in \ZZ_2^m$ is chosen via a $\rho$-Bernoulli distribution. To decrypt such a ciphertext, we compute $\vc{m}' \gets \vc{d} - \vc{A}\cdot \vc{s}$.
+
+Note that this scheme is only approximately correct in the sense that it holds that $\vc{m}' = \vc{m} + \vc{e}$, i.e. in most coordinates $\vc{m}'$ is identical to $\vc{m}$, but only in few coordinates $\vc{m}'$ and $\vc{m}$ differ. Furthermore, the one-time security of this encryption scheme follows from the LPN assumption.
+
+The high-level strategy to use this symmetric key encryption scheme is now as follows: Assume the matrix $\vc{A} \in \ZZ_2^{m \times n}$ is known to both the sender and the receiver. In the actual protocol this matrix will be chosen by the receiver, and the communication cost of sending $\vc{A}$ will be amortized by reusing $\vc{A}$ many times.
+
+The OT-receiver chooses a symmetric key $\vc{s} \pick \ZZ_2^n$ uniformly at random and encrypts his vector of choice bits $\vc{b} = (b_1,\dots,b_\ell)$ to $\vc{d} = \vc{A}\vc{s} + \vc{e} + \vc{b}$ (where again, $\vc{e} \in \ZZ_2^\ell$ is $\rho$-Bernoulli distributed). Furthermore, the receiver will encrypt the LPN secret under ElGamal, i.e. he encrypts $\vc{s}$ to $\vc{c} = \enc(\pk,\vc{s})$. For the moment, assume that $\vc{s}$ is encrypted bit-wise with standard ElGamal rather than batched ElGamal. The OT-receiver now sends the ElGamal public key $\pk$ and the ciphertexts $\vc{c}$ and $\vc{d}$ to the OT-sender.
+
+Now, given these values, the sender can homomorphically decrypt the $\vc{d}$ into ElGamal, effectively \emph{key-switching} from the ciphertext $\vc{d}$ into an ElGamal ciphertext. Concretely: The sender homomorphically evaluates the linear function $f(\vc{x}) = \vc{d} - \vc{A}\vc{x}$ on the ElGamal ciphertext $\vc{c} = \enc(\pk,\vc{s})$. This produces an ElGamal encryption $\vc{c}'$ encrypting $f(\vc{s}) = \vc{d} - \vc{A}\vc{s} = \vc{b} + \vc{e} = \vc{b}'$. In other words, the OT-sender has now obtained an ElGamal encryption of a vector $\vc{b}'$ which agrees with $\vc{b}$ in most locations.
+
+The high-level idea is now to let the OT-sender use this ciphertext $\vc{c}'$ as the encryption of the receiver's choice bits and proceed as in the ElGamal-based OT protocol above. If we were to naively use $\vc{c}'$ in this way, the receiver would obtain the correct output $m_{i,b_i}$ in locations where $\vc{b}$ and $\vc{b}'$ agree but would get the wrong output $m_{i,1-b_i}$ in locations where $\vc{b}$ and $\vc{b}'$ disagree. While there certainly are applications in which a small number of faulty locations are tolerable, in general, this leads to insecure protocols.
+
+There is, however, another issue with this approach. In this paragraph, we have implicitly assumed that ElGamal is homomorphic for linear functions modulo 2. However, since the group we implement ElGamal over is of large prime order $p$, when we evaluate linear functions such as $f(\vc{x}) = \vc{d} - \vc{A}\vc{x}$ over a ciphertext encrypting a $\vc{s} \in \bin^n$, the result of this evaluation is \emph{not} reduced modulo 2, and the resulting ciphertext in fact encrypts $f(\vc{s})$ as an integer. This does not cause major problems in terms of correctness, as this integer will still be small (at most of the size $m$), and hence decryption will still be efficient.
+
+However, this does cause major problems in terms of sender privacy, as we can only guarantee sender privacy for receiver messages that are guaranteed to encrypt a bit $b \in \bin$.
+
+For now, we will bypass this problem by relying on a homomorphic encryption scheme which is in fact homomorphic over $\ZZ_2$ (rather than $\ZZ_p$), offers function privacy for linear functions modulo 2 and is compatible with ciphertext compression. Such encryption can in fact be constructed from the Quadratic Residuosity assumption~\cite{C:DGIMMO19}.
+
+Another small issue we haven't addressed here is that the compression mechanisms for the sender and the receiver are somewhat orthogonal, in the sense that the sender's message is compressed by compressing a batched ElGamal ciphertext (which generally does not allow homomorphic evaluation across different components), whereas the receiver's compression strategy requires the homomorphic evaluation of linear functions with multiple (i.e. vector-valued) inputs. In the main body (Section~\ref{sec:rate1OTwithCoPIR}) we will show a tradeoff which allows us to reconcile these requirements, leading to a batch OT protocol with an overall rate-1.
+
+We will first discuss how to deal with the issue of errors in the key-switched ciphertext and then return to the issue of implementing our approach with ElGamal instead of QR-based encryption.
+
+\subsection{Dealing with LPN Errors}
+
+To deal with the LPN errors in the key-switched ciphertext $\vc{c}'$, we will pursue the following high-level strategy: The sender will introduce additional masking on the receiver's output, which can only be removed in error-free locations. This masking effectively erases the receiver's output in locations in which the receiver's output is corrupted.
+
+To communicate the correct outputs in the locations with errors, the parties will rely on an additional protocol which is run in parallel. Given that the number of errors is sufficiently small, the communication cost of this additional protocol will be insubstantial and not affect the overall asymptotic rate.
+
+We will first address the problem of erasing the receiver's output in corrupted locations. First, observe that the receiver knows the locations with errors (i.e. the support of the error vector $\vc{e}$). Assume that the LPN error vector $\vc{e}$ has a fixed hamming weight $t \approx \rho m$, and note that hardness of fixed-weight LPN follows routinely from the hardness of Bernoulli LPN\footnote{See e.g. \cite{PKC:Dottling15,C:BCGIKS19}}. A $t$-puncturable pseudorandom function~\cite{PKC:BoyGolIva14,C:BCGIKS19} is a pseudorandom function~\cite{C:GolGolMic84} which supports punctured keys. That is, given a PRF key $K$ and $t$ inputs $x_1,\dots,x_t$, we can efficiently compute a \emph{punctured key} $K'$ of size $t \cdot \poly$ which allows evaluating the PRF on all inputs \emph{except} $x_1,\dots,x_t$. Furthermore, the key $K'$ does not reveal the function values at $x_1,\dots,x_t$, i.e. $\PRF(K,x_1),\dots,\PRF(K,x_t)$ are pseudorandom given the punctured key $K'$. 
+
+The approach to erase the receiver's outputs in erroneous locations is now as follows. The sender chooses a PRF key $K$ and masks both $m_{i,0}$ and $m_{i,1}$ with $\PRF(K,i)$, i.e. instead of using $(m_{i,0},m_{i,1})$ as OT-inputs, he uses $m'_{i,0} = m_{i,0} \oplus \PRF(K,i)$ and $m'_{i,1} = m_{i,1} \oplus \PRF(K,i)$. Assuming that the sender can somehow communicate a punctured key $K'$ which is punctured at the locations $i_1,\dots,i_t$ of the errors (i.e. $\vc{e}_{i_j} = 1$ and $\vc{e}$ is 0 everywhere else), the receiver will be able to remove the mask from error-free locations by computing $m_{i,b_i} = m'_{i,b_i} \oplus \PRF(K', i)$. In the erroneous locations, however, $m_{i,1-b_i}$ will be hidden from the view of the receiver as $\PRF(K, i)$ is pseudorandom even given the punctured key $K'$.
+
+How can we communicate the punctured key $K'$ to the receiver with a small communication cost in such a way that the sender does not learn the error locations $i_1,\dots,i_t$? This could be achieved generically by relying on the punctured PRF construction of~\cite{PKC:BoyGolIva14} and transferring keys using a sublinear private information retrieval (PIR) scheme~\cite{FOCS:CGKS95,C:DGIMMO19}. However, recently~\cite{C:BCGIKS19} provided a protocol to achieve this task very efficiently via a two-round protocol communicating only $t \poly$ bits. In the main body (Section~\ref{sec:coOT}), we will refer to this primitive as \emph{co-PIR}, since effectively it allows to communicate of a large pseudorandom database to a receiver except in a few locations chosen by the receiver.
+
+Finally, to communicate the correct outputs to the receiver in the locations with errors, we will in fact rely on a two-message PIR scheme with polylogarithmic communication. Such schemes are known e.g. from LWE~\cite{FOCS:BraVai11} and were recently constructed from a wide variety of assumptions~\cite{C:DGIMMO19}, such as DDH and QR. The idea is as follows: For each error location $i_j$ the receiver sends an additional OT message $OT_1(b_{i_j})$ using an off-the-shelf low-rate OT protocol (e.g. the basic ElGamal-based protocol sketched above), as well as a PIR message ${PIR}_1(i_j)$. The sender speculatively completes this OT protocol for each index $i$ (since the index $i_j$ is not known to the sender), collects his OT responses in a database of size $\ell$, runs the PIR sender algorithm on this database, and sends the response back to the receiver. The receiver will now be able to recover the correct $OT_2$ message via PIR, complete the OT and recover $m_{i_j,b_{i_j}}$. We remark that for this protocol to be secure against semi-honest senders, we need a PIR protocol with sender privacy. However, e.g. the protocols provided in~\cite{C:DGIMMO19} readily have this feature.
+
+Carefully putting all these components together, we obtain a batch bit-OT protocol with rate-1, for both the sender and the receiver.
+
+\subsection{Emulating Small Subgroups}
+We now return to the issue that ElGamal does not provide function privacy for linear functions modulo 2. Recall that the issue essentially boils down to the fact that the plaintext space of ElGamal is \emph{natively} $\ZZ_p$, and when we encode messages in the least significant bits, i.e. encoding a bit $b$ as $g^b$, then for all practical purposes homomorphic evaluations of linear functions with $\bin$ coefficients are over $\ZZ_2$, i.e. the resulting ciphertext encodes the result of the function evaluation \emph{without} reduction modulo 2.
+
+From an algebraic perspective, this problem is rooted in the fact that since $p$ is prime, $\ZZ_p$ has no non-trivial subgroup, i.e. it just does not support modular reductions with respect to anything else than $p$.
+
+To approach this problem, we will take inspiration from the domain of lattice cryptography~\cite{STOC:Regev05}. There, messages are typically encoded in the high order bits of group elements, i.e. to encode $b$ in $\ZZ_p$, we would like to encode it as $b \cdot \frac{p}{2}$. However, since $p$ is odd, first have to round $\frac{p}{2}$ to the nearest integer in order to get a proper $\ZZ_p$ element, i.e. we encode $b$ via $b \cdot \left\lceil \frac{p}{2} \right\rceil$. If we could encode $b$ with respect to $\frac{p}{2} \notin \ZZ_p$, we would get a subgroup of order 2, i.e. for bits $b,b' \in \bin$ it holds that
+\[
+\left( b \cdot \frac{p}{2} + b'\cdot \frac{p}{2} \right) \text{mod } p = (b + b' \text{ mod } 2)\cdot \frac{p}{2}.
+\]
+However, once we round $\frac{p}{2}$ to the next integer, we get essentially the same problem as before: If we perform group operations on $b \left\lceil \frac{p}{2} \right\rceil$ and $b' \left\lceil \frac{p}{2} \right\rceil$, then the rounding errors start to accumulate information about $b$ and $b'$ which is cannot be obtained from $b + b' \text{ mod } 2$. Specifically
+\begin{align*}
+b \left\lceil \frac{p}{2}\right \rceil + b' \left\lceil \frac{p}{2} \right\rceil \text{ mod } p &= b \left(\frac{p}{2} + \frac{1}{2}\right) + b' \left( \frac{p}{2} + \frac{1}{2} \right) \text{ mod } p\\
+&= (b + b' \text{ mod } 2)\frac{p}{2} + (b + b') \frac{1}{2} \text{ mod } p.
+\end{align*}
+Thus, now the least significant bit of $b\left \lceil \frac{p}{2} \right\rceil + b' \left\lceil \frac{p}{2} \right\rceil \text{ mod } p$ e.g. leaks if $b = b' = 1$, something which cannot be learned from $b + b' \text{ mod } 2$.
+
+Consequently, at first glance the idea of encoding a bit $b$ in the ``high-order'' bits of a $\ZZ_p$ element seems ineffective. However, the lattice toolkit still has more to offer. In particular, in the context of sampling discrete Gaussians from lattices, Peikert~\cite{C:Peikert10} considered a technique called \emph{randomized rounding}. The basic idea is, to give a real number $r \in \RR$ to not always round to the same value e.g. $\lceil r \rceil$, but to sample an integer $z$ close to $r$. In~\cite{C:Peikert10}, this distribution is a discrete gaussian $Z$ on $\ZZ$ centered at $r$, i.e. the expectation of $Z$ is $r$. Such a discrete gaussian is parametrized by a gaussian parameter $\sigma$, which essentially controls the standard deviation of the discrete gaussian. We denote $Z$ by $\lceil r \rfloor_\sigma$.
+
+Now, given any two $r,r' \in \RR$ and $\sigma_1,\sigma_2 > \omega(\sqrt{\log(\secpar)})$ (more generally the \emph{smoothing parameter} of $\ZZ$), Peikert~\cite{C:Peikert10} shows that
+\[
+\lceil r \rfloor_{\sigma_1} + \lceil r' \rfloor_{\sigma_2} \approx_s \lceil r + r' \rfloor_{\sqrt{\sigma_1^2 + \sigma_2^2}}.
+\]
+In other words, while $\lceil r \rfloor_{\sigma_1} + \lceil r' \rfloor_{\sigma_2}$ and $\lceil r + r' \rfloor_{\sqrt{\sigma_1^2 + \sigma_2^2}}$ are note the same, they are statistically close. This means that anything that can be learned from $\lceil r \rfloor_{\sigma_1} + \lceil r' \rfloor_{\sigma_2}$ could have as well been learned from $\lceil r + r' \rfloor_{\sqrt{\sigma_1^2 + \sigma_2^2}}$! While this comes at the expense of an increase ``error'' term with parameter $\sqrt{\sigma_1^2 + \sigma_2^2}$, this \emph{additive error} is very small (of size approx $\sigma$) controlling the growth of this error term can be handled by standard techniques.
+
+Returning to our goal of emulating small subgroups in $\ZZ_p$, our approach follows almost instantly: Instead of encoding a bit $b \in \ZZ_2$ as $b \cdot\left \lceil \frac{p}{2} \right\rceil$, we will encode it as $\left\lceil b \cdot \frac{p}{2} \right\rfloor_{\sigma}$ (for a $\sigma > \omega(\sqrt{\log(\secpar)})$). For $b,b' \in \bin$ this ensures that
+\[
+\left\lceil b \cdot \frac{p}{2} \right\rfloor_{\sigma} + \left\lceil b' \cdot \frac{p}{2}\right \rfloor_{\sigma} \text{ mod } p \approx_s\left \lceil (b + b' \text{ mod } 2) \cdot \frac{p}{2} \right\rfloor_{\sqrt{2} \sigma} \text{ mod } p.
+\]
+Thus, we have ensured that $\left\lceil b \cdot \frac{p}{2} \right\rfloor_{\sigma} + \left\lceil b' \cdot \frac{p}{2} \right\rfloor_{\sigma} \text{ mod } p$ does not leak more information than $b + b' \text{ mod } 2$.
+
+\paragraph{Function-Private Evaluation for ElGamal}
+We will now briefly discuss how this idea leads to a modulo 2 function private homomorphic evaluation procedure for ElGamal. Say we have two ElGamal ciphertexts $c_1 = (g^{r_1},h^{r_1} \cdot g^{b_1})$ and $c_2 = (g^{r_2},h^{r_2} \cdot g^{b_2})$ for a public key $\pk = (g,h)$ and we want to homomorphically evaluate the function $f(x_1,x_2) = a_1 x_1 + a_2 x_2 \mod 2$ (for $a_1,a_2 \in \bin$) on this pair of ciphertexts. In the first step, we \emph{randomly encode} the function $f$ as 
+\[
+f'(x_1,x_2) = x_1 \cdot \left\lceil a_1 \frac{p}{2}\right \rfloor_\sigma + (1-x_1) \cdot \left\lceil 0 \right\rfloor_\sigma + x_2 \cdot\left \lceil a_2 \frac{p}{2}\right\rfloor_\sigma + (1-x_2) \cdot\left \lceil 0 \right\rfloor_\sigma,
+\]
+noting that this is still a linear function (chosen from a distribution). Homomorphically evaluating $f'$ on the ciphertexts $c_,c_2$ we obtain a ciphertext $c'$ encrypting
+\begin{align*}
+f'(b_1,b_1) &= b_1 \cdot\left \lceil a_1 \frac{p}{2}\right \rfloor_\sigma + (1-b_1) \cdot\left \lceil 0 \right\rfloor_\sigma + b_1 \cdot\left \lceil a_2 \frac{p}{2} \right\rfloor_\sigma + (1-b_1) \cdot\left \lceil 0 \right\rfloor_\sigma\\
+&=  \left\lceil b_1 a_1 \frac{p}{2} \right\rfloor_\sigma +  \left\lceil b_1 a_2 \frac{p}{2} \right\rfloor_\sigma\\
+&\approx_s  \left\lceil (b_1 a_1 + b_1 a_2 \text{ mod } 2) \frac{p}{2} \right\rfloor_{\sqrt{2} \sigma}.
+\end{align*}
+In other words, this ciphertext could have been simulated knowing only the function result $f(b_1,b_1) = b_1 a_1 + b_1 a_2 \text{ mod } 2$, establishing that this homomorphic evaluation procedure is a function private.
+
+One aspect to note is that while the messages $b_1,b_1$ are encoded in $c_1,c_2$ in the ``low-order-bits'' via $g^{b_1}$ and $g^{b_2}$, the function result $f(b_1,b_2)$ encrypted in $c'$ is encoded in the high order bits, i.e. it is encoded as $\approx g^{f(b_1,b_2) \frac{p}{2}}$. This makes it necessary to change the decryption procedure: Let $c' = (c'_1,c'_2)$ and $s$ be the secret key. To decrypt $c'$ we compute $f = c'_2 \cdot (c'_1)^{-s} \approx_s g^{\lceil f(s_1,s_2) \cdot \frac{p}{2} \rfloor}$, we test if $f$ is close to $g^0 = 1$ or $g^{\lceil p/2 \rceil}$. This recovers $f(s_1,s_2)$, as the error introduced by the rounding operation is of size at most $\poly$ via standard gaussian tail bounds.
+
+Finally, we remark this ``high-order-bit'' encoding is still compatible with ElGamal ciphertext compression, i.e. we can still compress homomorphically evaluated batch ElGamal ciphertexts down asymptotically optimal size, using a slightly different compression mechanism. This mechanism is discussed in Section~\ref{sec:ShrinkLHE}. We expect this technique to have additional applications. As one immediate application, it allows to upgrade of the key-dependent message secure encryption scheme of Boneh et al.~\cite{C:BHHO08} to support arbitrary linear functions modulo 2.
+
+\section{Definitions}
+In this chapter, we consider the two-message oblivious transfer (OT) with an overall (almost) optimal rate; where the sender has input $(m_0,m_1)\in\bits^2$ and the receiver a choice bit $b\in\bits$. In the end, the receiver learns the bit $m_b$ and nothing else; the sender learns nothing about $b$. We define the OT in the plain model as follows.
+\begin{definition}[Two-message OT]
+A two-message OT protocol between a sender and a receiver can be defined as a tuple of three PPT algorithms $\OT=(\OTR,\OTS,\OTD)$. Let $\lambda$ be the security parameter and $k=\poly[\lambda]$. The receiver computes $(\ot_1,\mathsf{st})\gets\OTR(1^\lambda,\bn)$ with his input $\bn=(b_1,\dots,b_k)\in\bits^k$ and sends $\ot_1$ to the sender. The sender computes $\ot_2\gets\OTS(1^\lambda,\ot_1, (\mn_0,\mn_1))$ where $(\mn_0,\mn_1)=((m_{0,1},\dots,m_{0,k})(m_{1,1},\dots,m_{1,k})\in(\bits^k)^2$ and sends to the receiver $\ot_2$. At the end, the receiver decodes the message to get $\mn_\bn=(m_{b_1,1},\dots,m_{b_k,k})\gets\OTD(\ot_2,\mathsf{st})$.
+\end{definition}
+
+
+In terms of security, OT should implement the following functionality.
+\paragraph{OT functionality.}  The functionality $\Fc_{\mathsf{OT}}$ is parametrized by a integer $k=\poly[\lambda]$ and works as follows:
+\begin{itemize}
+    \item \textbf{Receiver phase.} $\Rs$ sends $\bn$ to  $\Fc_{\mathsf{OT}}$ where $\bn\in\bin^k$. %It ignores future messages from $\Rs$ with the same $\sid$.
+
+  \item \textbf{Sender phase.}
+      $\Ss$ sends $(\mn_0,\mn_1)$ to $\Fc_{\mathsf{OT}}$ where $\mn_0,\mn_1\in\bin^k$. $\Fc_{\mathsf{OT}}$ sends $\{\mn_{b_i,i}\}_{i\in[k]}$ to $\Rs$. %It  ignores future messages from $\Ss$ with the same $\sid$.
+\end{itemize}
+
+\subsection{Distributed GGM-PPRF Correlation}
+Let $\PPRF_\mathsf{GGM}=(\keygen,\Eval,\Punct,\evalpunct)$ be the GGM-PPRF scheme based on \cite{JACM:GolGolMic86}. 
+The distributed GGM-PPRF correlation functionality \cite{CCS:BCGIKRS19} considers two parties: A receiver with input $\alpha\in\bin^\ell$ and a sender with input $\beta\in\FF_{p^r}$ and a GGM-PPRF key $\key$. The functionality outputs a punctured key $\key_\alpha$ and a hardwired value $\beta - \mathsf{PPRF.Eval}(\key,\alpha)$ to the receiver. We now present the formal definition of the functionality.
+
+\paragraph{Distributed GGM-PPRF correlation functionality.} The functionality $\Fc_{\mathsf{PPRF}\text{-}\mathsf{GGM}}$ is parametrized by integers $\ell,p,r\in\NN$. Moreover, let $\PPRF_\mathsf{GGM}=(\keygen,\Eval,\Punct,\evalpunct)$ be the GGM PPRF scheme with input space $\bin^\ell$ and output space $\FF_{p^r}$. The functionality works as follows:
+\begin{itemize}
+    \item \textbf{Receiver phase.} $\Rs$ sends $\alpha$ to  $\funcPPRFGGM$ where $\alpha\in\bin^\ell$. 
+    \item \textbf{Sender phase.} $\Ss$ sends $(\beta,\key)$ to $\funcPPRFGGM$ where $\beta\in\FF_{p^r}$ and $\key\leftarrow\mathsf{PPRF.KeyGen}(1^\lambda)$. $\funcPPRFGGM$ sends $\key_\alpha\leftarrow\PPRF.\Punct(\key,\alpha)$ and $\gamma\leftarrow\beta - \PPRF.\Eval(\key,\alpha)$ to $\Rs$.
+\end{itemize}
+
+A protocol that implements the functionality $\funcPPRFGGM$ is presented in \cite{CCS:BCGIKRS19}. The protocol uses a pseudorandom generator (PRG) and an oblivious transfer (OT)\footnote{The OT protocol is not required to have overall rate 1.} protocol in a black-box way. Moreover, security is proven against semi-honest adversaries. Finally, the protocol presented runs in two rounds (assuming that the OT runs in two rounds) and achieves communication complexity of $\poly[\lambda,\ell]$.
+
+
+For convenience, we will denote such a protocol by $\PPRFGGM=(\PPRFGGM.\Rs_1,\PPRFGGM.\Ss,\PPRFGGM.\Rs_2)$ where: \begin{itemize}
+    \item $\PPRFGGM.\Rs_1(\alpha)$ receives as input $\alpha\in\bin^\ell$. It outputs a message $\pprfggm_1$ and a state $\st$.
+    \item $\PPRFGGM.\Ss(\beta,\key,\pprfggm_1)$ receives as input $\beta\in\FF_{p^r}$, a key  $\key\leftarrow\mathsf{PPRF.KeyGen}(1^\lambda)$ and a message $\pprfggm_1$. It outputs $\pprfggm_2$.
+    \item $\PPRFGGM.\Rs_2(\st,\pprfggm_2)$ receives as input a state $\st$ and a message $\pprfggm_2$. It outputs a punctured key $\key_\alpha$ and a value $\gamma\in\FF_{p^r}$.
+\end{itemize}
+
+
+Using the two-round OT scheme of \cite{C:PeiVaiWat08}, we can obtain a black-box construction for distributed GGM-PPRF correlation scheme under the LWE, DDH or QR assumptions.
+
+
+
+\section{Compression-friendly Subgroup Emulation via Gaussian Rounding}
+\label{sec:subgroup}
+
+We will now provide our new subgroup emulation technique. We first define the gaussian rounding functionality.
+
+\begin{definition}
+Let $\sigma > 0$. For any $x \in \RR$, the gaussian rounding $\gaussround{x}{\sigma}$ is a random variable supported on $\ZZ$ defined by
+\[
+\gaussround{x}{\sigma} = x + D_{\ZZ - x,\sigma}.
+\]
+\end{definition}
+
+In other words, $\gaussround{x}{\sigma}$ is a discrete gaussian centred on $x \in \RR$ but supported on $\ZZ$.
+
+
+We will use the following convolution lemma which provides a \emph{simulation property} for gaussian rounding.
+
+\begin{lemma}\label{lem:gaussround}
+Let $\epsilon > 0$ be bounded by a sufficiently small constant and let $\sigma_1,\sigma_2 \geq \eta_\epsilon(\ZZ)$. Then it holds for all $x,y \in \RR$ that
+\[
+\gaussround{x}{\sigma_1} + \gaussround{y}{\sigma_2} \approx_s \gaussround{x + y}{\sqrt{\sigma_1^2 + \sigma_2^2}}.
+\]
+\end{lemma}
+It immediately follows from Lemma~\ref{lem:gaussround} that it holds for every integer $p \geq 2$ that
+\[
+\gaussround{x}{\sigma_1} + \gaussround{y}{\sigma_2} \mod p \approx_s \gaussround{x + y}{\sqrt{\sigma_1^2 + \sigma_2^2}} \mod p.
+\]
+
+\begin{proof}
+The lemma follows routinely from Corollary~\ref{cor:gaussconv}, by definition of $\gaussround{\cdot}{\sigma}$ it holds that
+\begin{align*}
+    \gaussround{x}{\sigma_1} + \gaussround{y}{\sigma_2} &= x + y + D_{\ZZ - x,\sigma_1} + D_{\ZZ - y,\sigma_2}\\
+    &\approx_s x + y + D_{\ZZ - x - y,\sigma_3}\\
+    &=\gaussround{x + y}{\sigma_3}.
+\end{align*}
+\end{proof}
+
+
+\begin{lemma}
+\label{lemma:CompfriendlySubgroupEmulation}
+Let $p > q \geq 2$ be integers with $q \leq 2^k$, and let $\sigma > \eta_\epsilon(\ZZ)$ for a negligible $\epsilon$. Let $f: \ZZ_q^n \to \ZZ_q$ be given by $f(x_1,\dots,x_n) = \sum_{i = 1}^n a_i x_i + c$ for $a_1,\dots,a_n,c \in \ZZ_q$. Define the randomized function $\hat{f}: \bin^{nk} \to \ZZ_p^n$ via
+\[
+\hat{f}(x_{1,1},\dots,x_{n,k}) = \sum_{i = 1}^n \sum_{j = 1}^k \left(x_{i,j} \cdot \gaussround{2^j \cdot \frac{p}{q} a_i}{\sigma} + (1 - x_{i,j})\gaussround{0}{\sigma}\right) + \gaussround{\frac{p}{q} c}{\sigma}.
+\]
+Then it holds for all $x_{1,1},\dots,x_{n,k} \in \bits$ that
+\[
+\hat{f}(x_{1,1},\dots,x_{n,k}) \approx_s \gaussround{\frac{p}{q} \cdot f\left(\sum_{j=1}^k x_{1,j} 2^j,\dots,\sum_{j=1}^k x_{n,j}2^j\right)}{\sqrt{2nk+1} \sigma}.
+\]
+\end{lemma}
+
+\begin{proof}
+It holds routinely that
+\begin{align}
+\hat{f}(x_{1,1},\dots,x_{n,k}) &= \sum_{i = 1}^n \sum_{j = 1}^k \left(x_{i,j} \cdot \gaussround{2^j \cdot \frac{p}{q} a_i}{\sigma} + (1 - x_{i,j})\gaussround{0}{\sigma}\right) + \gaussround{\frac{p}{q} c}{\sigma} \nonumber \\
+&\approx_s \sum_{i = 1}^n \sum_{j = 1}^k \gaussround{x_{i,j} 2^j \cdot \frac{p}{q} a_i}{\sqrt{2}\sigma} + \gaussround{\frac{p}{q} c}{\sigma} \label{eq:gauss1}\\
+&\approx_s \gaussround{\sum_{i = 1}^n \sum_{j = 1}^k x_{i,j} 2^j \cdot \frac{p}{q} a_i + \frac{p}{q} c}{\sqrt{2nk+1}\sigma} \label{eq:gauss2}\\
+&= \gaussround{\frac{p}{q} \cdot \left(\sum_{i = 1}^n a_i \left( \sum_{j = 1}^k x_{i,j} 2^j \right) + c \right)}{\sqrt{2nk+1}\sigma} \nonumber\\
+&= \gaussround{\frac{p}{q} \cdot f\left(\sum_{j=1}^k x_{1,j} 2^j,\dots,\sum_{j=1}^k x_{n,j}2^j\right)}{\sqrt{2nk+1}\sigma} \nonumber,
+\end{align}
+where in equations \eqref{eq:gauss1} and \eqref{eq:gauss2} we have used Lemma \ref{lem:gaussround}.
+\end{proof}
+
+\section{Rate-1 Circuit-Private Linearly Homomorphic Encryption}
+\label{sec:ShrinkLHE}
+
+%\nico{TODO for Pedro: Provide the theorems and high-level ideas for homomorphic encryption with ciphertext shrinking}
+
+%\def \evalshrink{\mathsf{Eval\& Shrink}}
+\def \QR{\mathbb{QR}}
+\def \J{\mathbb{J}}
+\def \ginvr{\mathbf{g}^{-1}_\mathsf{rnd}}
+
+
+%In this section, we define packed LHE schemes and present several constructions based on LWE, DDH or QR.% and recall several constructions from LWE \cite{TCC:BDGM19},  QR \cite{C:DGIMMO19} and DDH \cite{C:BoyGilIsh16,C:DGIMMO19,TCC:BBDGM20} assumptions.
+
+
+In this section, we define circuit-private LHE and present constructions based on LWE, DDH or QR. All constructions achieve rate 1.
+
+
+\begin{definition}
+A (packed) \emph{linearly homomorphic encryption} (LHE) scheme $\mathsf{LHE}$ over a finite group $\GG$ is composed by a tuple of algorithms $(\mathsf{Keygen},\mathsf{Enc},\mathsf{Eval},\mathsf{Shrink},\mathsf{DecShrink})$ such that:
+\begin{itemize}
+    \item $\mathsf{KeyGen}(1^\lambda,k)$ takes as input a security parameter $\lambda$ and $k\in\NN$. It outputs a pair of public and secret keys $(\pk,\sk)$.
+    \item $\mathsf{Enc}(\pk,\mn=(m_1,\dots, m_k))$ takes as input a public key $\pk$ and a message $\mn=(m_1,\dots , m_k)\in\GG^k$. It outputs a ciphertext $\ct$.
+    \item $\mathsf{Eval}(\pk,f, (\ct_1,\dots, \ct_\ell))$ takes as input a public key $\pk$, a linear function $f:(\GG^{ k})^\ell\to \GG^{k}$ and $\ell$ ciphertexts $(\ct_1,\dots, \ct_\ell)$. It outputs a new ciphertext $\tilde \ct$.
+    \item $\mathsf{Shrink}(\pk,\ct)$ takes as input a public key $\pk$ and  a ciphertext $\ct$. It outputs a new shrunken ciphertext $\ct'$.
+    \item $\mathsf{DecShrink}(\sk,\ct)$ takes as input a secret key $\sk$ and a  shrunken ciphertext $\ct$. It outputs a message $\mn$.
+\end{itemize}
+\end{definition}
+
+For simplicity, we define the algorithm $\mathsf{Eval\& Shrink}(\pk,f,(\ct_1\dots, \ct_\ell))$  which outputs a ciphertext $\tilde \ct$  and is defined as $$\evalshrink (\pk,f,(\ct_1\dots, \ct_\ell))=\mathsf{Shrink}(\pk,\mathsf{Eval}(\pk,f, (\ct_1,\dots, \ct_\ell)))$$ for any linear function $f$.
+
+We require the following properties from a (circuit-private) packed LHE: Correctness, semantic security, compactness and circuit privacy.
+
+\begin{definition}[Correctness]
+A packed LHE scheme $\mathsf{LHE}$ is said to be correct if for any $\ell\in\NN$, any messages $\mn_1, \dots, \mn_\ell$ and any linear function $f:(\GG^{ k})^\ell\to \GG^k$ we have that $$\Pr\left[\tilde \mn \leftarrow \mathsf{DecShrink}(\sk,\tilde \ct):\begin{array}{c}
+    (\pk,\sk)\leftarrow \mathsf{KeyGen}(1^\lambda,k) \\
+    \ct_i\leftarrow \mathsf{Enc}(\pk,\mn_i) \text{ for }i \in[\ell]\\ 
+  \tilde \ct\leftarrow  \evalshrink (\pk,,f,(\ct_1\dots, \ct_\ell))
+\end{array}\right]=1$$ where $\tilde \mn\leftarrow f(\mn_1,\dots, \mn_\ell)$.
+ \end{definition}
+ 
+ \begin{definition}[Semantic Security] 
+ A packed LHE scheme $\mathsf{LHE}$ is said to be semantically secure if for all $\lambda\in\NN$, all $k=\poly[\lambda]$ and all adversaries $\Ac=(\Ac_0,\Ac_1)$ we have that $$\left|\Pr\left[b\leftarrow\Ac_1(\st,\ct):\begin{array}{c}
+    (\pk,\sk)\leftarrow \mathsf{KeyGen}(1^\lambda,k) \\
+    (\mn_0,\mn_1,\st)\leftarrow\Ac_0(\pk)\\ 
+    b\sample \bin \\ 
+  \ct\leftarrow \mathsf{Enc}(\pk,\mn_b)
+\end{array}\right]-\frac{1}{2}\right|\leq \negl[\lambda].$$
+ \end{definition}
+ 
+  \begin{definition}[Compactness] 
+  We require that a packed LHE scheme $\mathsf{LHE}$ has the following compactness properties:
+  \begin{itemize}
+      \item For $(\pk,\sk)\leftarrow \mathsf{KeyGen}(1^\lambda,k)$, the size of the public key $|\pk|$ is bounded  by $k\cdot \poly[\secpar]$.
+    %   \item For any linear function $f:\FF^{\ell k}\to \FF^k$ and any ciphertext $ \tilde \ct\leftarrow  \evalshrink (\pk,,f,(\ct_1\dots, \ct_\ell))$, where $(\pk,\sk)\leftarrow \mathsf{KeyGen}(1^\lambda,k)$ and $ \ct_i\leftarrow \mathsf{Enc}(\pk,\mn_i)$ for $i \in[\ell]$, we have that $$\lim \inf \frac{|f(\mn_1,\dots ,\mn_\ell)|}{|\tilde \ct|} \rightarrow 1$$ for sufficiently large $\lambda$, $k$.
+     \item For any linear function $f:(\GG^{ k})^\ell\to \GG^k$ and any $(\mn_1,\dots,\mn_\ell)\in(\GG^{ k})^\ell$  we have that $$ \lim_{\lambda\rightarrow \infty} \inf \frac{|f(\mn_1,\dots ,\mn_\ell)|}{| \evalshrink (\pk,,f,(\ct_1\dots, \ct_\ell))|} \rightarrow 1$$ for sufficiently large $k$, where $(\pk,\sk)\leftarrow \mathsf{KeyGen}(1^\lambda,k)$ and $ \ct_i\leftarrow \mathsf{Enc}(\pk,\mn_i)$ for $i \in[\ell]$. In this case, we say that the scheme has a rate-1.
+  \end{itemize}
+ \end{definition}
+
+
+We also need that the packed LHE scheme fulfills circuit privacy (in the semi-honest case).
+
+\begin{definition}[Circuit Privacy]
+A packed LHE scheme $\mathsf{LHE}$ is said to be circuit-private if for all messages $(\mn_1,\dots, \mn_\ell)\in(\GG^{ k})^\ell$ and all linear functions $f:(\GG^{ k})^\ell\to\GG^k$, there exists a simulator $\Sim$ such that for all adversaries $\Ac$ we have that $$\left|\begin{array}{c}
+     \Pr\left[1\leftarrow\Ac(\pk,\sk,\tilde \ct):\begin{array}{c}
+       (\pk,\sk)\leftarrow \mathsf{KeyGen}(1^\lambda,k)\\
+     \ct_i\leftarrow \mathsf{Enc}(\pk,\mn_i) \text{ for }i \in[\ell]\\ 
+     \tilde \ct\leftarrow  \evalshrink (\pk,,f,(\ct_1\dots, \ct_\ell))
+\end{array}\right]- \\
+     \Pr\left[1\leftarrow\Ac(\pk,\sk,\tilde \ct):\begin{array}{c}
+       (\pk,\sk)\leftarrow \mathsf{KeyGen}(1^\lambda,k)\\
+     \tilde \ct\leftarrow \mathsf{Sim}(\pk,\tilde \mn) 
+\end{array}\right]
+\end{array} \right|\leq \negl[\lambda]$$ where $\tilde \mn\leftarrow f(\mn_1,\dots ,\mn_\ell)$.
+\end{definition}
+
+%In other words, since $\Sim$ does not use $\mn_1,\dots, \mn_\ell$ to compute $\tilde \ct$, no information about them is leaked from $\tilde \ct$ (apart from what is trivially leaked by $f$).
+
+In other words, since $\Sim$ does not use $f$ to compute $\tilde \ct$, no information about it is leaked from $\tilde \ct$ (apart from what is trivially leaked by $f$).
+
+
+\paragraph{Encryption of matrices.} Above, we defined LHE that supports encryption of vectors $\mn\in\GG^k$. We can easily extend the definition to support encryption of matrices $\Mn\in\GG^{k\times \alpha}$ for any $\alpha=\poly[\lambda]$: Given a public key $\pk$, encryption $\enc(\pk,\Mn)$ of $\Mn$ is defined as $$\enc(\pk,\Mn)=\begin{pmatrix}
+| &  & | \\ 
+\enc\left(\pk,\mn^{(1)}\right) & \dots &\enc\left(\pk,\mn^{(\alpha)}\right) \\ 
+| &  & |
+\end{pmatrix}$$ where $\mn^{(i)}$ is the $i$-th column of $\Mn$.
+
+
+\subsection{Construction from LWE}
+
+
+
+Before sketching the scheme, we present the LWE assumption \cite{STOC:Regev05}. 
+
+\begin{definition}[Learning with Errors]
+ Let $n,q\in\ZZ$. The LWE assumption holds if for any PPT adversary $\Ac$ $$\left|\Pr\left[1\leftarrow\Ac(\An,\sn\An+\en)\right]-\Pr\left[1\leftarrow\Ac(\An,\un)\right]\right|\leq \negl[\lambda]$$  for all $m=\poly[n]$, where $\An\sample \ZZ_q^{n\times m}$, $\sn\sample \ZZ_q^n$, $\en\sample D^m_{\ZZ,\sigma}$ and $\un\sample \ZZ_q^m$.
+  \end{definition}{}
+
+When we consider $\sigma=\zeta q \geq 2\sqrt{n}$, the LWE problem is at least as hard as solving the approximate shortest independent vector problem to within a factor of $\tilde \Oc(n/\zeta)$ \cite{STOC:Regev05}. 
+
+
+
+
+\subsubsection{Shrinking ciphertexts} 
+The work of \cite{TCC:BDGM19} shows how to shrink LWE-based ciphertexts of the form $(\An\rn,\bn_1\rn  + \lceil q/2  \rfloor m_1,\dots, \bn_k\rn  + \lceil q/2  \rfloor m_k)$ (where $\An\sample \ZZ^{n\times m}$, $\bn_i$ are LWE samples and $\rn$ is a short vector). The resulting shrunken ciphertext is composed by $(\An\rn,b_1,\dots, b_k)$ where $b_1,\dots, b_k\in\bin$ and thus the rate tends to 1 when we consider large $k$.
+
+Before presenting the result of \cite{TCC:BDGM19}, we first need to define \emph{relaxed correctness} for a standard LHE (as in \cite{TCC:BDGM19}). A standard LHE is an LHE where the algorithms $\shrink$ and $\decshrink$ are replaced by a decryption algorithm $\mn\leftarrow\dec(\sk,\ct)$, and it is not required to have rate 1. 
+
+\begin{definition}[Relaxed correctness]
+ Let $\mathsf{LHE}=(\keygen,\enc,\eval,\dec)$ be a (standard) LHE. We say that $\mathsf{LHE}$ is correct with $B$-noise if $$\mathbf{T}\mn+\en\leftarrow\dec(\sk,\eval(\pk,f,(\enc(\pk,\mn_1),\dots, \enc(\pk,\mn_\ell)))$$ where $\mathbf{T}$ is an encoding matrix and $\norm{\en}\leq B$.
+\end{definition}
+
+\begin{lemma}[\cite{TCC:BDGM19}]
+\label{lemma:shrinkLWE}
+Let $\mathsf{LHE}=(\keygen,\enc,\eval,\dec)$ be a (standard) LHE that is correct with $B$-noise. Additionally, assume that the ciphertexts of the scheme are of the form $(\cn_1,\cn_2)$, the secret key is of the form $\Sn\in\ZZ_q^{k\times n}$ and noisy decryption works by computing $\cn_2-\Sn\cn_1$. If $q>4kB$ then there exist a correct shrinking algorithm $(\mathsf{Shrink}_{\mathsf{LWE}},\mathsf{DecShrink}_\mathsf{LWE})$ for the packed LWE-based LHE scheme.
+\end{lemma}
+
+
+
+
+
+
+\subsubsection{Circuit-private LHE from LWE.} We now present the circuit-private LHE from LWE. The scheme is a hybrid between the packed Regev PKE \cite{STOC:GenPeiVai08} and GSW PKE \cite{C:GenSahWat13}, together with the circuit-privacy technique of \cite{C:BdMW16}.
+
+We present a scheme supporting plaintext space $\bin^k$. We later briefly explain how we can extend the scheme to any $q=\poly[\lambda]$. %The scheme can be generalized 
+
+We will need the following ingredients: Let $(\mathsf{Shrink}_{\mathsf{LWE}},\mathsf{DecShrink}_\mathsf{LWE})$ be the pair of algorithms from Lemma \ref{lemma:shrinkLWE}. Let $\sigma,\alpha,\beta,q,m,n,t,k$ be polynomials in $\lambda$. Let $\ginvr$ be the (randomized) function defined in Section \ref{sec:prelim} that receives $v\in\ZZ_p$ as input and outputs  $x\sample D_{\Lambda^\perp_q(\gn)+\gn^{-1}(v),\gamma}$ for some $\gamma=\tilde \Oc(1)$. As defined in Section \ref{sec:prelim}, let $\Gn_i$ be the matrix with $k$ rows which is zero everywhere except for the $i$-th row which is equal to $\gn=(1,2,2^2,\dots, 2^t)$, and let $\bar \Gn_j$ be the matrix with $j$ rows and where every row is equal to $\gn$. %Moreover, let $q\in\ZZ$ be an even number. 
+
+
+\begin{description}
+\item[$\mathsf{KeyGen}(1^\lambda,k):$]~
+\begin{itemize}
+    \item Sample $\An\sample \ZZ_q^{n\times m}$, $\Sn\sample \ZZ_q^{k\times n}$ and $\En\sample D_{\ZZ,\sigma}^{k\times m}$. Compute $\Bn=\Sn\An+\En$.
+    \item Output $\pk=(\An,\Bn)$ and $\sk=\Sn$.
+\end{itemize}
+
+\item[$\mathsf{Enc}(\pk,\mn=(m_1,\dots, m_k)\in\bin^k):$]~
+\begin{itemize}
+    \item Parse $\pk$ as $(\An,\Bn)$. 
+    \item Sample $\Rn\sample D_{\ZZ,\alpha}^{m\times t}$. Compute $\Cn_1=\An\Rn$ and $\Cn_2=\Bn\Rn+\sum_{i=1}^k m_i\Gn_i$.% \pedro{Replace this $\ell$ by t}
+    
+    %Sample $\Rn\sample \bin^{m\times \ell}$. Compute $\Cn_1=\An\Rn$ and $\Cn_2=\Bn\Rn+\sum_i^k m_i\Gn_i$ %\lceil \frac{q}{2} \rfloor .
+    \item Output $\ct=(\Cn_1,\Cn_2)$.
+\end{itemize}
+
+\item[$\mathsf{Eval}(\pk,f, (\ct_1,\dots, \ct_\ell))$]~
+\begin{itemize}
+    \item Parse $\pk$ as , $f$ as $f(\xn_1,\dots, \xn_\ell)=\sum_{i=1}^\ell a_i\xn_i+\bn$, where $\an=(a_1,\dots,a_\ell)\in\ZZ_2^\ell$, $\bn\in\bin^k$ and $\ct_i$ as $(\Cn_{1,i},\Cn_{2,i})$.
+    \item Compute $$\cn_1=\sum_{j=1}^\ell \Cn_{1,j}\cdot \gn^{-1}_{\mathsf{rnd}}\left(\frac{q}{2} a_j\right)^T+\left( \bar \Gn_n-\Cn_{1,j}\right)\ginvr(0)^T+\An\yn_j^T$$ and $$\cn_2=\sum_{j=1}^\ell\left( \Cn_{2,j}\cdot\gn^{-1}_{\mathsf{rnd}}\left(\frac{q}{2} a_j\right)^T  + \left(\bar \Gn_k-\Cn_{2,j}\right)\cdot\ginvr(0)^T+\Bn\yn_j^T\right) +\frac{q}{2} \bn $$ where $\yn_j\sample D_{\ZZ,\beta}^m$.% (where $\beta=\tilde \Theta(C\alpha\sqrt{\lambda \ell})$ and $C$ is the constant from Lemma \ref{lemma:normDG}).% and $\xn\sample D_{\ZZ,\cdot}$.
+    \item Output $\tilde \ct=(\cn_1,\cn_2)$.
+\end{itemize}
+%c_2(-1)^{(\sum_i m_i a_i )+ b + t}h^{(\sum_i r a_i) + b +t}
+
+\item[$\mathsf{Shrink}(\pk,\ct):$]~ Output $\tilde \ct\leftarrow\mathsf{Shrink}_\mathsf{LWE}(\pk,\ct)$.
+
+\item[$\mathsf{DecShrink}(\sk,\ct):$] Output $\mn\leftarrow\mathsf{DecShrink}_\mathsf{LWE}(\sk,\ct)$.
+\end{description}
+
+
+
+% \begin{lemma}[\cite{MathAnnal:Ban93}]
+% \label{lemma:normDG}
+% There exists a constant $C>0$ such that for all $\alpha\in \RR$ $\norm{\xn}\leq C\alpha\sqrt{n}$ for $\xn\sample D_{\ZZ,\alpha}^n$, except with negligible probability in $n$.
+% \end{lemma}
+
+We now analyze the construction presented above. We start by showing that the scheme is correct.
+
+
+% \begin{lemma}[\cite{MathAnnal:Ban93}]
+% \label{lemma:normDG}
+% For all $\alpha\in \RR$, $\norm{\xn}\leq \alpha\sqrt{n}$ for $\xn\sample D_{\ZZ,\alpha}^n$, except with negligible probability in $n$.
+% \end{lemma}
+
+
+\begin{lemma}[Correctness]
+Let $q=2q'>4k\left(2\alpha\gamma t  + \beta \right)\ell\sigma m\sqrt{k}$ for some $q'\in\ZZ$. Then the scheme presented above is correct.
+\end{lemma}
+\begin{proof}
+Let $(\pk,\sk)\leftarrow\keygen(1^\lambda,k)$ and  $\ct_i=(\Cn_{1,i},\Cn_{2,i})\leftarrow\enc(\pk,\mn_i)$ be well-formed ciphertexts for all $i\in[\ell]$. We have to show that $$\tilde \mn\leftarrow\mathsf{DecShrink}(\sk,\mathsf{Shrink}(\pk,\eval(\pk,f,(\ct_1,\dots, \ct_\ell))))$$ where $\tilde \mn=\sum_{j=1}^\ell a_j\mn_j + \bn\leftarrow f(\mn_1,\dots, \mn_\ell)$.
+
+
+Let $(\cn_1,\cn_2)\leftarrow\eval(\pk,f,(\ct_1,\dots, \ct_\ell))$. A routine calculation shows that $$\cn_1=\An\left(\sum_{j=1}^\ell \Rn_j\left(\gn^{-1}_{\mathsf{rnd}}\left(\frac{q}{2} a_j\right) - \ginvr(0)\right)^T+\yn_j^T\right)$$ and $$\cn_2=\Bn\left(\sum_{j=1}^\ell \Rn_j\left(\gn^{-1}_{\mathsf{rnd}}\left(\frac{q}{2} a_j\right) - \ginvr(0)\right)^T+\yn_j^T\right) + \frac{q}{2}\left(\sum_{j=1}^\ell a_j\mn_j + \bn\right)$$ where the last equality holds because $2|q$. 
+
+We first show that the scheme meets the conditions of Lemma \ref{lemma:shrinkLWE}. After computing $\cn_2-\Sn\cn_1$ we obtain $$\frac{q}{2}\left(\sum_{j=1}^\ell a_j\mn_j + \bn\right) + \En\left(\sum_{j=1}^\ell \Rn_j\left(\gn^{-1}_{\mathsf{rnd}}\left(\frac{q}{2} a_j\right) - \ginvr(0)\right)^T+\yn_j^T\right).$$
+
+
+Let $\en'=\En\left(\sum_{j=1}^\ell \Rn_j\left(\gn^{-1}_{\mathsf{rnd}}\left(\frac{q}{2} a_j\right) - \ginvr(0)\right)^T+\yn^T_j\right)$. By Lemma \ref{lemma:normDG}, each row of $\Rn_j$ has norm at most $\alpha\sqrt{t}$, the vectors $\gn^{-1}_{\mathsf{rnd}}\left(\frac{q}{2} a_j\right),\ginvr(0)$ have norm at most $\gamma\sqrt{t}$, $\yn_j$ has norm at most $\beta\sqrt{m}$ and each row of $\En$ has norm at most $\sigma\sqrt{m}$. Hence $$\norm{\en'}\leq \left(2\alpha\gamma t  + \beta \right)\ell\sigma m\sqrt{k}.$$
+
+Since $q>4k\left(2\alpha\gamma t  + \beta \right)\ell\sigma m\sqrt{k}$ then we are in the conditions of Lemma \ref{lemma:shrinkLWE}. Thus, we conclude that $$\tilde \mn\leftarrow\mathsf{DecShrink}(\sk,\mathsf{Shrink}(\pk,(\cn_1,\cn_2)))$$ where $\tilde \mn=\sum_{j=1}^\ell a_j\mn_j + \bn\leftarrow f(\mn_1,\dots, \mn_\ell)$ and the scheme is correct.
+\end{proof}
+
+
+
+Semantic security can be established by relying on the smoothing lemma together with the  LWE assumption \cite{STOC:Regev05,FOCS:MicReg04}.
+
+\begin{lemma}[Semantic security]
+Assume that the LWE assumption holds for $\sigma=\zeta q \geq 2\sqrt{n}$ for some $\zeta\in\RR$ and $m=\poly[(n+k)\log q]$.  Also, let $\alpha\geq  \omega(\sqrt{ \log m})$. Then the scheme is semantically secure.%\pedro{Still need to check these parameters}
+ \end{lemma}
+ \begin{proof}[Proof (Sketch)]
+ In the first hybrid, we replace the public key $(\An,\Bn)$ by $(\An,\Un)$  for a uniformly chosen $\Un$ and this change goes unnoticed by the LWE assumption. Next, we can use the smoothing lemma \cite{STOC:Regev05,FOCS:MicReg04,STOC:GenPeiVai08} to replace $(\An,\Un,\An\Rn,\Un\Rn)$ by $(\An,\Un,\Vn_1,\Vn_2)$ where $\Vn_1,\Vn_2$ are uniformly chosen. Finally, we can conclude that the encrypted message is statistically hidden and the result follows.
+ \end{proof}
+
+
+Before presenting the proof that the scheme is circuit private, we present a lemma that we will need.
+
+
+
+
+\begin{lemma}[\cite{C:BdMW16,CJTC:AggReg16}]
+\label{lemma:smoothingErrorBDMW}
+For any $a\in\ZZ_q$ and any matrix $\En\in\ZZ^{k\times m}$, let $r=\tilde \Theta(\max_i \norm{\en_i}\sqrt{\lambda})$ (where $\en_i$ are the rows of $\En$). Then $$\En\cdot\ginvr(a)^T+\yn^T\approx_s \fn^T$$ where $\yn\sample D_{\ZZ,r}^k$ $\fn\sample D_{\ZZ,r'}^k$ and $r'=r\sqrt{1+\max_i \norm{\en_i}^2}$.
+\end{lemma}
+
+
+
+\begin{lemma}[Circuit-privacy]
+Let $\beta=\tilde \Theta(\alpha\sqrt{2\lambda t})$. Then the scheme presented above is circuit private.%\pedro{Parameters }
+\end{lemma}
+
+\begin{proof}
+To prove circuit-private, we show how we can simulate evaluated ciphertexts. We first present the simulator $\Sim(\pk,\tilde\mn)$:
+\begin{description}
+\item $\Sim(\pk,\tilde \mn):$
+\begin{itemize}
+   % \item Sample $\bar \rn\sample D_{\ZZ,\mu}^m$. Compute $\cn_1=\An\bar\rn^T$ and $\cn_2=\Bn\bar\rn^T +\frac{q}{2} \tilde \mn$ where $\mu=\sqrt{2\ell}r'$, $r'=\beta\sqrt{1+\left(\beta\sqrt{m}\right)^2}$ and $\tilde \mn=f(\mn_1,\dots, \mn_t)$.
+    \item Sample $\bar \rn\sample D_{\ZZ,\mu}^m$. Compute $\cn_1=\An\bar\rn^T$ and $\cn_2=\Bn\bar\rn^T +\frac{q}{2} \tilde \mn$ where $\mu=\beta\sqrt{\ell\left(1+\left(\alpha\sqrt{t}\right)^2\right)}$ and $\tilde \mn=f(\mn_1,\dots, \mn_t)$.
+    %$\mu=\sqrt{\ell}r'$, $r'=\beta\sqrt{1+\left(\alpha\sqrt{t}\right)^2}$ and $\tilde \mn=f(\mn_1,\dots, \mn_t)$.
+    \item Output $\tilde\ct\leftarrow\mathsf{Shrink}_\mathsf{LWE}(\pk,(\cn_1,\cn_2))$.
+\end{itemize}
+\end{description}
+
+We now prove that the simulated ciphertext is indistinguishable from a evaluated ciphertext.
+
+
+
+
+First, note that evaluated ciphertexts are of the form $$\cn_1=\sum_{j=1}^\ell \Cn_{1,j}\cdot \gn^{-1}_{\mathsf{rnd}}\left( \frac{q}{2}  a_j\right)^T-\left( \bar \Gn_n-\Cn_{1,j}\right)\cdot\ginvr(0)^T + \An\yn_j^T$$ and $$\cn_2=\sum_{j=1}^\ell\left( \Cn_{2,j}\cdot\gn^{-1}_{\mathsf{rnd}}\left( \frac{q}{2} a_j\right)^T  + \left(\bar \Gn_k-\Cn_{2,j}\right)\cdot\ginvr(0)^T+\Bn\yn_j^T\right)+ \frac{q}{2}  \bn.$$
+
+%For now, we will ignore the term $\lceil \frac{q}{2} \rfloor \bn$.
+% Writing in matrix form, each term of the sum is of the form  $$    \begin{pmatrix} \Cn_{1,j} \\ \Cn_{2,j}\end{pmatrix} \ginvr\left(\frac{q}{2} a_j\right)^T+ \left( \begin{pmatrix} \bar \Gn_n \\ \bar \Gn_k\end{pmatrix} - \begin{pmatrix} \Cn_{1,j} \\ \Cn_{2,j}\end{pmatrix}\right) \ginvr(0)^T +\begin{pmatrix}
+% \An \\ \Bn
+% \end{pmatrix}\yn_j^T$$ which is the same as $$
+%     \begin{pmatrix} \An\Rn_j \\ \Bn\Rn_j  + \sum _{i=1}^k m_{j,i} \Gn_i\end{pmatrix} \ginvr\left(\frac{q}{2} a\right)^T+ \left( \begin{pmatrix} \bar \Gn_n \\ \bar \Gn_k\end{pmatrix} - \begin{pmatrix} \An\Rn_j \\ \Bn\Rn_j  + \sum_{i=1}^k m_{j,i}\Gn_i\end{pmatrix}\right) \ginvr(0) ^T+\begin{pmatrix}
+% \An \\ \Bn
+% \end{pmatrix}\yn_j^T.$$
+
+
+% After expanding the last equation we obtain $$ 
+%     \begin{pmatrix} \An \\ \Bn\end{pmatrix}\left(\Rn_j\cdot \ginvr\left(\frac{q}{2} a\right)^T - \Rn_j\cdot \ginvr(0)^T + \yn_j^T \right)+  \begin{pmatrix}
+%     \mathbf{0} \\ a_j\cdot\mn_j
+%     \end{pmatrix}$$ where $\mn_j=(m_{j,1},\dots, m_{j,t})$. 
+    
+    Writing in matrix form, each term of the sum is of the form  \begin{align*}
+       &  \begin{pmatrix} \Cn_{1,j} \\ \Cn_{2,j}\end{pmatrix} \ginvr\left(\frac{q}{2} a_j\right)^T+ \left( \begin{pmatrix} \bar \Gn_n \\ \bar \Gn_k\end{pmatrix} - \begin{pmatrix} \Cn_{1,j} \\ \Cn_{2,j}\end{pmatrix}\right) \ginvr(0)^T +\begin{pmatrix}
+\An \\ \Bn \\
+\end{pmatrix}\yn_j^T \\
+= &
+    \begin{pmatrix} \An\Rn_j \\ \Bn\Rn_j  + \sum _{i=1}^k m_{j,i} \Gn_i\end{pmatrix} \ginvr\left(\frac{q}{2} a\right)^T+ \left( \begin{pmatrix} \bar \Gn_n \\ \bar \Gn_k\end{pmatrix} - \begin{pmatrix} \An\Rn_j \\ \Bn\Rn_j  + \sum_{i=1}^k m_{j,i}\Gn_i\end{pmatrix}\right) \ginvr(0) ^T+\begin{pmatrix}
+\An \\ \Bn
+\end{pmatrix}\yn_j^T \\ 
+=&
+    \begin{pmatrix} \An \\ \Bn\end{pmatrix}\left(\Rn_j\cdot \ginvr\left(\frac{q}{2} a\right)^T - \Rn_j\cdot \ginvr(0)^T + \yn_j^T \right)+  \begin{pmatrix}
+    \mathbf{0} \\ a_j\cdot\mn_j
+    \end{pmatrix}
+    \end{align*} where $\mn_j=(m_{j,1},\dots, m_{j,t})$. 
+    
+    
+    % By Lemma \ref{lemma:smoothingErrorBDMW}, we have that $$ \begin{pmatrix} \An \\ \Bn\end{pmatrix}\left(\Rn_j\cdot\ginvr\left(\frac{q}{2}a\right) ^T- \Rn_j\cdot \ginvr(0)^T + \yn_j^T \right)\approx_s \begin{pmatrix}
+    % \An \\ \Bn
+    % \end{pmatrix}\rn_j'^T$$ for $\rn_j'\sample D_{\ZZ,r'}$ where $r'=\beta\sqrt{1+\left(\alpha\sqrt{t}\right)^2}$ (note that $\yn_j$ can be written as the sum of two independent discrete gaussian samples with parameter $\beta/\sqrt{2}$). Hence, $$ 
+    % \begin{pmatrix} \An \\ \Bn\end{pmatrix}\left(\Rn_j\cdot \ginvr\left(\frac{q}{2} a\right)^T - \Rn_j\cdot\ginvr(0)^T + \yn_j^T \right) + \begin{pmatrix}
+    % \mathbf{0} \\ a_j\cdot\mn_j
+    % \end{pmatrix}\approx_s  
+    % \begin{pmatrix} \An \\ \Bn\end{pmatrix}\rn_j'^T + \begin{pmatrix}
+    % \mathbf{0} \\ a_j\cdot\mn_j
+    % \end{pmatrix}.$$ 
+    
+      %By Lemma \ref{lemma:smoothingErrorBDMW}, we have that
+      It follows that
+      \begin{align*}
+         & \begin{pmatrix} \An \\ \Bn\end{pmatrix}\left(\Rn_j\cdot\ginvr\left(\frac{q}{2}a\right) ^T- \Rn_j\cdot \ginvr(0)^T + \yn_j^T \right) \\ &\approx_s\begin{pmatrix} \An \\ \Bn\end{pmatrix}\left(\left(\Rn_j\cdot\ginvr\left(\frac{q}{2}a\right) ^T + \yn_{j,1}^T\right)+\left(- \Rn_j\cdot \ginvr(0)^T + \yn_{j,2}^T\right) \right)\\ 
+          &\approx_s \begin{pmatrix} \An \\ \Bn\end{pmatrix}\left(\rn_{1,j}'+\rn_{2,j}' \right)\\ 
+          &\approx_s \begin{pmatrix}
+    \An \\ \Bn
+    \end{pmatrix}\rn_j'^T
+      \end{align*}  for $\yn_{j,b}\sample D_{\ZZ,\beta/\sqrt{2}}$, $\rn_{j,1}',\rn_{j,2}'\sample D_{\ZZ,r'/\sqrt{2}}^m$ and $\rn_j'\sample D_{\ZZ,r'}^m$ where $r'=\beta\sqrt{1+\left(\alpha\sqrt{t}\right)^2}$. The first and the last steps follow from the fact that the sum of two independent discrete gaussians is statistically close to a discrete gaussian (that is, $\yn_j\approx_s\yn_{j,1}+\yn_{j,2}$ and $\rn_j'\approx_s\rn_{j,1}'+\rn'_{j,2}$). The second step follows from Lemma \ref{lemma:smoothingErrorBDMW}. %The first and the last step follows from the fact that $\yn_j\approx_s\yn_{j,1}+\yn_{j,2}$ where $\yn_{j,b}\sample D_{\ZZ,\beta/\sqrt{2}}$, the second step follows from Lemma \ref{lemma:smoothingErrorBDMW} and the last step follows again from the fact that the sum of two independent discrete ga. 
+      
+      Hence, $$ 
+    \begin{pmatrix} \An \\ \Bn\end{pmatrix}\left(\Rn_j\cdot \ginvr\left(\frac{q}{2} a\right)^T - \Rn_j\cdot\ginvr(0)^T + \yn_j^T \right) + \begin{pmatrix}
+    \mathbf{0} \\ a_j\cdot\mn_j
+    \end{pmatrix}\approx_s  
+    \begin{pmatrix} \An \\ \Bn\end{pmatrix}\rn_j'^T + \begin{pmatrix}
+    \mathbf{0} \\ a_j\cdot\mn_j
+    \end{pmatrix}.$$ 
+    
+    
+
+From this, we conclude that \begin{align*}
+    \begin{pmatrix}
+\cn_1 \\ \cn_2
+\end{pmatrix} & = \sum_{j=1}^\ell \begin{pmatrix}
+ \Cn_{1,j}\cdot \gn^{-1}_{\mathsf{rnd}}\left( \frac{q}{2} a_j\right)^T-\left( \bar \Gn_n-\Cn_{1,j}\right)\ginvr(0)^T + \An\yn_j^T \\  \Cn_{2,j}\cdot\gn^{-1}_{\mathsf{rnd}}\left( \frac{q}{2} a_j\right)^T  + \left(\bar \Gn_k-\Cn_{2,j}\right)\ginvr(0)^T+\Bn\yn_j^T
+\end{pmatrix} + \begin{pmatrix}
+\mathbf{0} \\ \frac{q}{2} \bn
+\end{pmatrix}\\ 
+&\approx_s \sum_{j=1}^\ell  \begin{pmatrix}
+\An \\ \Bn
+\end{pmatrix}\rn_j'^T  + \begin{pmatrix} \mathbf{0} \\\frac{q}{2} \left(\sum_{j=1}^\ell a_j \mn_j + \bn\right) \end{pmatrix}\\ 
+&\approx_s   \begin{pmatrix}
+\An \\ \Bn
+\end{pmatrix}\bar \rn^T  + \begin{pmatrix} \mathbf{0} \\\frac{q}{2} \cdot f(\mn_1,\dots, \mn_t) \end{pmatrix}\\ 
+\end{align*}
+where $\bar \rn\sample D_{\ZZ,\mu}^m$. The last step follows from the fact that the sum of $\ell$ independent discrete gaussians with parameter $r'$ (where $r'=\beta\sqrt{1+\left(\alpha\sqrt{t}\right)^2}$) is statistically indistinguishable from a discrete gaussian with parameter $\sqrt{\ell}r'$.
+\end{proof}
+
+
+\paragraph{Ciphertext rate.} It is easy to see that the rate of the ciphertext tends to $1$ for large enough $k$ by relying on Lemma \ref{lemma:shrinkLWE}. It is also easy to see that the size of the public key $\pk=(\An,\Bn=\Sn\An+\En)\in\ZZ_q^{n\times m}\times \ZZ_q^{k\times m}$ is bounded by $k\cdot \poly[\lambda]$.
+
+\paragraph{Larger plaintext space.} In the construction presented above, the plaintext space is $\ZZ_2^k$. The construction can be extended to support plaintext space $\ZZ_p^k$  for any $p=\poly[\lambda]$ by choosing the LWE modulus $q$ of the form $q=pp'$ where $p,p'$ are co-prime and encoding the encrypted message by $q/p$.
+
+
+%The shrinking mechanism of Lemma \ref{}
+
+
+
+\subsection{Construction from DDH}
+
+In the following, let $\mathcal{G}$ be a (prime-order) \emph{group generator}, that is, $\mathcal{G}$ is an algorithm  that takes as an input a security parameter $1^\secpar$ and outputs $(\GG, p, g)$, where $\GG$ is the description of a multiplicative cyclic group, $p$ is the order of the group which is always a prime number unless differently specified, and $g$ is a generator of the group. In the following, we state the decisional version of the Diffie-Hellman (DDH) assumption.%~\cite{DifHel76}.
+
+
+
+\begin{definition}[Decisional Diffie-Hellman Assumption]
+\label{def:ddh}
+Let $(\GG, p, g) \sample \mathcal{G}(1^\secpar)$. We say that the DDH assumption holds (with respect to $\mathcal{G}$) if for any PPT adversary $\Ac$
+ \[\left|\Pr[1\leftarrow\mathcal{A}((\GG, p , g), (g^a, g^b, g^{ab})) ] - \Pr[1\leftarrow\mathcal{A}((\GG, p , g), (g^{a}, g^{b}, g^{c}))]\right| \leq \negl[\lambda]\] where $a,b,c\sample \mathbb{Z}_p$.
+\end{definition}
+
+
+\subsubsection{Shrinking ciphertexts.} %Sketch shrinking procedure from \cite{C:BoyGilIsh16,C:DGIMMO19,TCC:BBDGM20}.
+
+We first present how we can shrink DDH-based ciphertexts to achieve rate 1. The shrinking mechanism presented below is a modification of the one presented in \cite{TCC:BBDGM20} (which is itself based on previous works \cite{C:BoyGilIsh16,C:DGIMMO19}).
+
+Let $(\GG, p, g) \sample \mathcal{G}(1^\secpar)$ and $k\in\ZZ$. Consider an El Gamal public key of the form $\pk=(g,(h_1,\dots, h_k)=(g,(g^{x_1},\dots, g^{x_k}))\in\GG^{k+1}$ for $x_1,\dots, x_k\sample \ZZ_p$ (here, $\xn=(x_1,\dots, x_k)$ is the secret key). Consider the following modified El Gamal encryption algorithm where a ciphertext for  $\mn=(m_1,\dots, m_k)\in\bin^k$ is of the form $\ct=(c_1,(c_{2,1},\dots, c_{2,k}))\in\GG^{k+1}$ where $c_1=g^r$ and $c_{2,i}=h_i^rg^{\left\lceil m_i(p/2)\right\rfloor_\sigma}$. \footnote{Note that $\left\lceil \cdot\right\rfloor_\sigma$ is defined in section \ref{sec:subgroup}.}
+We now show how to compress ciphertexts of this form.
+
+We will need the following ingredients: Let $B,T\in\poly[\lambda]$ and $\PRF=(\keygen,\eval)$ be a PRF that maps $g\in\GG$ to $\bin^\tau$ for some $\tau\in\ZZ$. We also define the function $\mathsf{LEq}_<:\GG^2\to \bin$ which receives two group elements $g_0,g_1$ and outputs $1$ if $g_0<g_1$ and $0$ otherwise, for some order relation $<$ (e.g. the lexicographic order).
+% \begin{itemize}
+%     \item $\PRF.\eval:\Kc\times \GG\to \bin^\tau$
+%     \item $B,T\in\poly[\lambda]$
+% \end{itemize}
+
+
+
+\begin{description}
+\item[$\mathsf{Shrink}_\mathsf{DDH}(\pk,\ct):$]~ 
+\begin{itemize}
+    \item Parse $\pk=(g,(h_1,\dots, h_k))$ and $\ct=(c_1,(c_{2,1},\dots, c_{2,k}))$. Let $w=g^{\left \lfloor p/2\right\rfloor}$.
+    \item Sample a PRF key $\key\sample \PRF.\keygen(1^\lambda)$ such that the following conditions are simultaneously satisfied:
+    \begin{enumerate}
+        \item\label{Cond:bound} For every $i\in[k]$ and $j\in\{-B,\dots,B\}$ we have that $$\PRF.\eval(\key,c_{2,i}\cdot g^j)\neq 0 \text{ and } \PRF.\eval(\key,c_{2,i}\cdot w\cdot g^j)\neq 0.$$
+        \item\label{Cond:breakpoint} For all $i\in[k]$ there exists $\ell \in \{B+1,\dots,T\}$ such that $$\PRF.\eval(\key, c_{2,i}\cdot g^\ell)=0\text{ and }\PRF.\eval(\key,c_{2,i}\cdot w \cdot g^\ell)= 0.$$
+    \end{enumerate}
+    \item For every $i\in[k]$, let $\delta_{0,i},\delta_{1,i}>0$ be the smallest integer such that $$\PRF.\eval(\key,c_{2,i}\cdot g^{\delta_{0,i}})=0 \text{ and }\PRF.\eval(\key,c_{2,i}\cdot w\cdot g^{\delta_{1,i}})=0.$$ Let $\alpha_{0,i}=c_{2,i}\cdot g^{\delta_{0,i}}$ and $\alpha_{1,i}=c_{2,i}\cdot w\cdot g^{\delta_{1,i}}$. If $\mathsf{LEq}_<(\alpha_{0,i},\alpha_{1,i})=0$, then set $b_i=0$. Else, set  $b_i=1$.
+    \item Output $\bar \ct=(c_1,\key,(b_1,\dots, b_k))$.
+\end{itemize}
+
+%Output $\tilde \ct\leftarrow\mathsf{Shrink}_\mathsf{LWE}(\pk,\ct)$.
+
+\item[$\mathsf{DecShrink}_\mathsf{DDH}(\sk,\bar \ct):$]~
+\begin{itemize}
+    \item Parse $\sk=\xn=(x_1,\dots,x_k)$ and $\bar \ct=(c_1,\key,(b_1,\dots b_k))$. Let $w=g^{\left \lfloor p/2\right\rfloor}$.
+    \item For every $i\in [k]$, compute $\beta_{0,i}=c_1^{x_i}$ and $\beta_{1,i}=c_1^{x_i}\cdot w$.
+    \item For every $i\in [k]$, find the smallest integers $\gamma_{0,i},\gamma_{1,i}>0$ such that $$\PRF.\eval(\key,\beta_{0,i}\cdot g^{\gamma_{0,i}})=0 \text{ and }\PRF.\eval(\key,\beta_{1,i}\cdot g^{\gamma_{1,i}})=0.$$ Let $\bar \alpha_{0,i}=\beta_{0,i}\cdot g^{\gamma_{0,i}}$ and $\bar \alpha_{1,i}=\beta_{1,i}\cdot g^{\gamma_{1,i}}$. If $\mathsf{LEq}_<(\bar\alpha_{0,i},\bar \alpha_{1,i})=b_i$, set $m_i=0$. Else, set $m_i=1$.
+    \item Output $\mn=(m_1,\dots, m_k)$.
+\end{itemize}
+\end{description}
+
+
+
+\begin{lemma}[Correctness]
+\label{lemma:CorrectShrinkDDH}
+Let $B=\poly[\lambda]$ be such that $B>\lambda\sigma+1$. Then the shrinking procedure presented above is correct.
+\end{lemma}
+\begin{proof}
+We have to show that $\mn\leftarrow\mathsf{DecShrink}_\mathsf{DDH}(\sk,\mathsf{Shrink}(\pk,\ct))$ for $\ct=(c_1,(c_{2,1},\dots,c_{2,k}))$ where $c_1=g^r$ and $c_{2,i}=h_i^rg^{\left\lceil m_i(p/2)\right\rfloor_\sigma}$ for $i\in[k]$.
+
+For that, we will first show that 
+$$\begin{array}{c}
+    ( \bar \alpha_{0,i}=\alpha_{0,i} \land \bar \alpha_{1,i}=\alpha_{1,i} ) \\
+    \lor  \\
+   ( \bar \alpha_{0,i}=\alpha_{1,i} \land \bar \alpha_{1,i}=\alpha_{0,i})
+\end{array}.$$ We have that $\alpha_{0,i}\neq \alpha_{1,i}$.
+
+
+The first observation is that $0\in \{ z_0- (B-1) , \dots, z_0+ (B-1) \}$ where $z_0=\left\lceil 0\right\rfloor_\sigma$ except with negligible probability. This is because $B>\lambda\sigma+1$ and $|z_0|<\lambda\sigma$ except with negligible probability.\footnote{Recall that for a gaussian random variable $X$ centered on $0$ and with parameter $\sigma$, the probability that $|X|>\lambda\sigma$ is negligible in $\lambda$.} Thus $0\in \{ z_0- B , \dots, z_0+ B \}$ 
+
+Likewise,  $p/2\in\left[z_{p/2}-(B-1),z_{p/2}+(B-1)\right]$ where $z_{p/2}=\gaussround{p/2}{\sigma}$ and thus  $\left\lfloor p/2\right\rfloor\in \{ z_{p/2}- B , \dots, z_{p/2}+ B \}$.% for $z_{p/2}'=\gaussround{\left\lfloor p/2\right\rfloor}{\sigma}$.
+
+We divide the proof in two cases: Either $m_i=0$ or $m_i=1$. We start by analyzing the case where $m_i=0$.
+
+\paragraph{Case $m_i=0$.} Assume that $m_i=0$. We first note that $\bar \alpha_{0,i}=\beta_{0,i}\cdot g^{\gamma_{0,i}}=c_1^{x_i}\cdot g^{\gamma_{0,i}}=h_i^r\cdot g^{\gamma_{0,i}}$, and $\alpha_{0,i}=h_i^r\cdot g^{z_{0,i}+ \delta_{0,i}} $ where $z_{0,i}=\left\lceil m_i(p/2)\right\rfloor_\sigma=\gaussround{0}{\sigma}$.% and $\alpha_{1,i}=h_i^r\cdot g^{\lfloor p/2 \rfloor}\cdot g^{\left\lceil(m_i p/2)\right\rfloor_{\sigma} + \delta_{1,i}}$.  
+We prove that $\bar \alpha_{0,i}=\alpha_{0,i}$. To prove this, it is enough to show that $\gamma_{0,i}=z_{0,i}+ \delta_{0,i}$. Observe that, if this is not the case, then one of the two cases must be true:
+\begin{enumerate}
+    \item[(i)] $\gamma_{0,i}<\left\lceil m_i(p/2)\right\rfloor_\sigma+ \delta_{0,i}=\left\lceil 0\right\rfloor_\sigma+ \delta_{0,i}$: If this happens then one of the three cases must hold: \begin{enumerate}
+        \item $\gamma_{0,i}<z_{0,i} - B$: This case cannot hold since $0\in\{ z_{0,i}- B , \dots, z_{0,i}+ B \}$ (except with negligible probability) and $\gamma_{0,i}\geq 0$. This implies that $\gamma_{0,i}\geq z_{0,i} - B$, except with negligible probability.
+        \item $z_{0,i} - B\leq \gamma_{0,i}\leq z_{0,i} + B$: This case cannot hold since it violates condition \ref{Cond:bound}.
+        \item $ z_{0,i}+ B<\gamma_{0,i}<z_{0,i}+ \delta_{0,i}$: This case violates condition \ref{Cond:breakpoint} since $\delta_{0,i}>B$ is the smallest integer that fulfills $\PRF.\eval(\key,h_i^r\cdot g^{z_{0,i}+ \delta_{0,i}})$.
+    \end{enumerate}
+    \item[(ii)] $\gamma_{0,i}>z_{0,i}+ \delta_{0,i}$: This case cannot happen as $\gamma_{0,i}$ is the smallest integer (greater than $0$) such that $\PRF.\eval(K,h_i^r\cdot g^{\gamma_{0,i}})=0$.  
+    \end{enumerate}
+
+Showing that, if $m_i=0$, then $\bar \alpha_{1,i}=\alpha_{1,i}$ follows an identical reasoning. We conclude that, if $m_i=0$, then $\bar \alpha_{0,i}=\alpha_{0,i} \land \bar \alpha_{1,i}=\alpha_{1,i}$.
+
+
+\paragraph{Case $m_i=1$.} Now assume that $m_i=1$. In this case, we show that $\bar \alpha_{1,i}=\alpha_{0,i}$ and $\bar \alpha_{0,i}=\alpha_{1,i}$.
+
+
+%We first note that $\alpha_{1,i}=h_i^r\cdot g^{\lfloor p/2 \rfloor}\cdot g^{\left\lceil(m_i p/2)\right\rfloor_{\sigma} + \delta_{1,i}}$  
+
+First, note that $\bar \alpha_{1,i}=h_i^r\cdot g^{\left\lfloor p/2\right\rfloor + \gamma_{1,i}}$ and $\alpha_{0,i}=h_i^r\cdot g^{z_{p/2,i}+ \delta_{0,i}} $ where $z_{p/2,i}=\left\lceil m_i(p/2)\right\rfloor_\sigma=\gaussround{p/2}{\sigma}$. We prove that $\bar \alpha_{1,i}=\alpha_{0,i}$. To show this, we have to prove that $\left\lfloor p/2\right\rfloor + \gamma_{1,i} =  z_{p/2,i}  + \delta_{0,i}$. Assume that this is not true, then one of the two cases must happen:
+\begin{enumerate}
+    \item[(i)] $\left\lfloor p/2\right\rfloor + \gamma_{1,i} <  z_{p/2,i}  + \delta_{0,i}$: If this is the case, then one of the three cases must happen:
+    \begin{enumerate}
+        \item $\left\lfloor p/2\right\rfloor + \gamma_{1,i}< z_{p/2,i}  - B$: This case cannot happen because $\left\lfloor p/2\right\rfloor\in \{z_{p/2,i}- B,\dots, z_{p/2,i} + B \}$ except with negligible probability and $\gamma_{1,i}>0$.
+        \item $ z_{p/2,i}  -B<\left\lfloor p/2\right\rfloor + \gamma_{1,i}< z_{p/2,i}  + B$: This case violates \ref{Cond:bound} since for any value $j\in \{z_{p/2,i} - B,\dots, z_{p/2,i} + B \}$, we have that $\PRF.\eval(\key,h_i^r\cdot g^{z_{p/2,i}}\cdot  g^j)\neq 0$.
+        \item $ z_{p/2,i}  + B<\left\lfloor p/2\right\rfloor + \gamma_{1,i}< z_{p/2,i}  +\delta_{0,i}$: This case is also impossible since, by condition \ref{Cond:breakpoint}, $\delta_{0,i}$ is the smallest integer (greater than $0$) such that $\PRF.\eval(\key,h_i^r \cdot g^{z_{p/2,i}}\cdot g^{\delta_{0,i}})= 0$.
+    \end{enumerate}
+    
+    
+   % $\left\lceil p/2\right\rfloor_{\sigma} -B<\left\lfloor p/2\right\rfloor + \gamma_{1,i}<\left\lceil p/2\right\rfloor_{\sigma} + B$ or $\left\lfloor p/2\right\rfloor + \gamma_{1,i}<\left\lceil p/2\right\rfloor_{\sigma} +\delta_{0,i}$ (the case where $\left\lfloor p/2\right\rfloor + \gamma_{1,i}<\left\lceil p/2\right\rfloor_{\sigma} - B$ cannot happen since $\left\lfloor p/2\right\rfloor\in \{\left\lceil p/2\right\rfloor_{\sigma} - B,\dots, \left\lceil p/2\right\rfloor_{\sigma} + B \}$ except with negligible probability and $\gamma_{1,i}>0$). The first case violates \ref{Cond:bound} since for any value $j\in \{\left\lceil p/2\right\rfloor_{\sigma} - B,\dots, \left\lceil p/2\right\rfloor_{\sigma} + B \}$, we have that $\PRF.\eval(K,h_i^r\cdot g^{\left\lceil p/2\right\rfloor_{\sigma}}\cdot  g^j)\neq 0$. The second case is also impossible since, by condition \ref{Cond:breakpoint}, $\delta_{0,i}$ is the smallest integer such that $\PRF.\eval(K,h_i^r \cdot g^{\left\lceil p/2\right\rfloor_{\sigma}}\cdot g^{\delta_{0,i}})= 0$.
+    
+     \item[(ii)] $\left\lfloor p/2\right\rfloor + \gamma_{1,i} > z_{p/2,i} + \delta_{0,i}$: Assume that this is the case. Then $\gamma_{1,i}$ is not the smallest integer greater than $0$ such that $\PRF.\eval(\key,h_i^rg^{\left\lfloor p/2\right\rfloor + \gamma_{1,i}})=0$.
+\end{enumerate}
+If $m_i=1$, showing that  $\bar \alpha_{0,i}=\alpha_{1,i}$ follows an identical reasoning as above.
+
+
+
+\paragraph{Wrapping up.} We proved that if $m_i=0$ then $\alpha_{0,i}=\bar \alpha_{0,i}$ and $\alpha_{1,i}=\bar \alpha_{1,i}$. On the other hand, if $m_i=1$, then $\alpha_{0,i}=\bar \alpha_{1,i}$ and $\alpha_{1,i}=\bar \alpha_{0,i}$. Thus, if the encrypted value is $m_i=0$ $$b_i=\mathsf{LEq}_<(\alpha_{0,i},\alpha_{1,i})=\mathsf{LEq}_<(\bar \alpha_{0,i},\bar \alpha_{1,i})$$ and the value output by $\mathsf{DecShrink}_\mathsf{DDH}$ is $0$. Else if $m_i=0$ $$b_i=\mathsf{LEq}_<(\alpha_{0,i},\alpha_{1,i})\neq \mathsf{LEq}_<(\bar \alpha_{0,i},\bar \alpha_{1,i})$$ and the value output by $\mathsf{DecShrink}_\mathsf{DDH}$ is $1$.
+\end{proof}
+
+
+
+
+
+
+\begin{lemma}[Runtime]
+\label{lemma:runtimeShrinkDDH}
+Let $\PRF$ be a PRF, $\tau=\log(8Bk)$ and $T=2^\tau\lambda\log_e(k) + B(1+4k)$. Then, the shrinking algorithm $\mathsf{Shrink}_\mathsf{DDH}$ described above terminates in polynomial time, except with negligible probability.
+\end{lemma}
+\begin{proof}
+The analysis of the runtime follows the same reasoning as the analysis of the runtime of the shrinking procedure from \cite{TCC:BBDGM20}.
+
+We have to show that the algorithm $\mathsf{Shrink}_\mathsf{DDH}$ is able to find a PRF key $\key$ that fulfills both conditions in expected polynomial time, since all other subroutines run in polynomial time. Here, we treat $\PRF.\eval$ as a truly random function. The same analysis is true for the case where $\PRF.\eval$ is a PRF except with negligible probability.
+
+We first lower-bound the probability that a certain PRF key $\key\leftarrow\PRF.\keygen(1^\lambda)$ satisfies condition \ref{Cond:bound}. That is,
+\begin{align*}
+   \Pr\left[ \forall i\in [k],\forall j\in\{-B,\dots, B\},\begin{array}{c}
+        \PRF.\eval(\key,c_{2,i}\cdot g^j)\neq 0  \\
+        \land \\ 
+        \PRF.\eval(\key,c_{2,i}\cdot w\cdot g^j)\neq 0
+   \end{array}\right]& \geq \left(1-\frac{1}{2^\tau}\right)^{4Bk} \\ 
+   &\geq 1-\frac{4Bk}{2^\tau}\\
+   &= 1-\frac{1}{2}=\frac{1}{2}.
+\end{align*}
+Here, the first inequality comes from the fact that the outputs of $\PRF.\eval(K,\cdot)$ are uniform and independent over $\bin^\tau$ and the second inequality is simply Bernoulli's inequality.
+
+We now upper-bound the probability that condition \ref{Cond:breakpoint} is not met given that condition \ref{Cond:bound} happens. Let $S$ be the set of PRF keys for which condition \ref{Cond:bound} is satisfied. Then
+\begin{align*}
+    \Pr\left[\exists i\in[k] \forall j\in\{B+1,\dots ,T\}:\begin{array}{c}
+     \PRF.\eval(\key,c_{2,i}\cdot g^j)\neq 0   \\
+     \lor \\
+     \PRF.\eval(\key,c_{2,i}\cdot w\cdot g^j)\neq 0 
+\end{array}\middle| K\in S \right]\\
+\leq \sum_{i=1}^k \Pr\left[\forall j\in\{B+1,\dots ,T\}:\begin{array}{c}
+     \PRF.\eval(\key,c_{2,i}\cdot g^j)\neq 0   \\
+     \lor \\
+     \PRF.\eval(\key,c_{2,i}\cdot w\cdot g^j)\neq 0 
+\end{array}\middle| K\in S \right] \\ 
+\leq \sum_{i=1}^k\left(1-\frac{1}{2^\tau}\right)^{T-B-4Bk}\leq \sum_{i=1}^k e^{-(T-B-4Bk)/2^\tau}=  \sum_{i=1}^k e^{-\lambda\log_e(k)}=e^{-\lambda}.
+\end{align*}
+Here, the first inequality is a simple consequence of the union bound and the second inequality follows from observing that $\key$ fixes $\PRF.\eval(\key,\cdot)$ on at most $4Bk$ points.
+
+We conclude that, after $\lambda$ iterations of the protocol, the probability that all the keys do not fulfill both conditions is negligible in $\lambda$.
+\end{proof}
+
+\paragraph{Ciphertext rate.} After applying $\shrink_\mathsf{DDH}$ we obtain a ciphertext composed by $\tilde \ct=(c_1,\key,(b_1,\dots, b_k))\in\GG\times \Kc\times \bin^k$. Hence, $$\frac{|\tilde \ct|}{|\mn|}=\frac{|c_1|+|\key|+|(b_1,\dots, b_k)|}{k}=\frac{2\lambda + k}{k}=1+\frac{2\lambda}{k}$$ which tends to 1 for large enough $k$.
+
+
+
+\subsubsection{Function-private LHE from DDH.} We now present our circuit-private LHE over $\ZZ_2$ based on DDH. 
+\begin{description}
+\item[$\mathsf{KeyGen}(1^\lambda,k):$]~
+\begin{itemize}
+\item $(\GG, p, g) \sample \mathcal{G}(1^\secpar)$
+    \item Sample $x_1,\dots, x_k\sample \ZZ_p$. Compute $h_i=g^{x_i}$.
+    \item Output $\pk=(\GG, p,g,h_1,\dots, h_k)$ and $\sk=\xn=(x_1,\dots, x_k)$.
+\end{itemize}
+
+\item[$\mathsf{Enc}(\pk,\mn=(m_1,\dots, m_k)):$]~
+\begin{itemize}
+    \item Parse $\pk$ as $(\GG, p,g,h_1,\dots, h_k)$.
+    \item Sample $r\sample \ZZ_p$. Compute $c_1=g^r$ and $c_{2,i}=h_i^rg^{m_i}$ for $i\in[k]$.%$c_{2,i}=h_i^rg^{\left\lceil m_i(p/2)\right\rfloor_\sigma}$ for $i\in[k]$.
+    \item Output $\ct=(c_1,(c_{2,1},\dots, c_{2,k}))$.
+\end{itemize}
+
+\item[$\mathsf{Eval}(\pk,f, (\ct_1,\dots, \ct_\ell))$]~
+\begin{itemize}
+    \item Parse $\pk$ as $(\GG, p,g,h_1,\dots, h_k)$, $f$ as $f(\xn_1,\dots, \xn_\ell)=\sum_{i=1}^\ell a_i\xn_i + \bn$ for $\an=(a_1,\dots, a_\ell)\in\ZZ_2^\ell$ and $\bn\in\ZZ_2^k$ and $\ct_i$ as $(c_{1,i},\cn_{2,i})$ where $\cn_{2,i}=(c_{2,1,i},\dots, c_{2,k,i}))$ for $i\in [\ell]$.
+ 
+    \item Compute $\bar \ct=(\bar c_1, (\bar c_{2,1},\dots ,\bar c_{2,1}))$ where 
+    $$\bar c_1=\prod _{i=1}^\ell \left( c_{1,i}^{\left\lceil a_i\frac{p}{2}\right\rfloor_\sigma}\cdot (g\cdot c_{1,i}^{-1})^{\left\lceil 0\right\rfloor_\sigma}  \right) \cdot g^t $$ and 
+    $$\bar \cn_2=\bigodot_{i=1}^\ell \left( \cn_{2,i}^{\left\lceil a_i\frac{p}{2}\right\rfloor_\sigma} \odot (g\cdot \cn_{2,i}^{-1})^{\left\lceil 0\right\rfloor_\sigma}  \right) \odot \left(g^{\left\lceil b_1\frac{p}{2}\right\rfloor_\sigma},\dots, g^{\left\lceil b_k\frac{p}{2}\right\rfloor_\sigma}\right) \odot (h_1^t,\dots, h_k^t)$$
+
+    %$$(\bar c_1,\bar \cn_2)=\prod _{i=1}^\ell \left( (c_{1,i},\cn_{2,i})^{\left\lceil a_i\frac{p}{2}\right\rfloor_\sigma} \odot (c_{1,i}^{-1},g\cdot \cn_{2,i}^{-1})^{\left\lceil 0\right\rfloor_\sigma}  \right) \odot (0,g^{\left\lceil b_1\frac{p}{2}\right\rfloor_\sigma},\dots, g^{\left\lceil b_k\frac{p}{2}\right\rfloor_\sigma}) \odot (g^t,h_1^t,\dots, h_k^t).$$
+
+for $t\sample \ZZ_p$ and where $\odot$ denotes the component-wise multiplication.
+\item Output $\bar \ct$.
+\end{itemize}
+
+\item[$\mathsf{Shrink}(\pk,\ct):$]~ Output $\bar \ct\leftarrow\mathsf{Shrink}_\mathsf{DDH}(\pk,\ct)$.
+
+\item[$\mathsf{DecShrink}(\sk,\ct):$] Output $\mn\leftarrow\mathsf{DecShrink}_\mathsf{DDH}(\sk,\bar \ct)$.
+\end{description}
+
+Correctness and expected polynomial runtime of the LHE described above  is guaranteed by Lemma \ref{lemma:CorrectShrinkDDH} and Lemma \ref{lemma:runtimeShrinkDDH} by setting $B>\lambda(\sigma(\sqrt{2\ell}+1))$. Semantic security of the scheme can be established by a simple reduction to the DDH assumption in a similar way as in many previous works (the reduction is similar to the one that proves that El Gamal is semantically secure). It is also easy to see that the scheme has rate-1 for large enough $k$.
+
+We now show that the scheme is circuit private. Essentially, circuit privacy can be established by resorting to Lemma \ref{lemma:CompfriendlySubgroupEmulation}.
+
+\begin{lemma}[Circuit-privacy]
+The scheme presented above is circuit private.
+\end{lemma}
+\begin{proof}
+
+We need to show that we can simulate evaluated ciphertexts. We first present the simulator that receives $\tilde \mn\leftarrow f(\mn_1,\dots, \mn_\ell)$. 
+
+\begin{description}
+\item[$\Sim(\pk,\tilde \mn)$]~
+\begin{itemize}
+    \item Sample $t\sample \ZZ_q$ and $\alpha_i=\left\lceil \tilde m_i\frac{p}{2}\right\rfloor_{\sqrt{2\ell+1}\sigma}$.
+    \item Compute $\tilde \ct=(\tilde c_1,(\tilde c_{2,1},\dots,\tilde c_{2,1}))$ where $\tilde c_1=g^t$ and $\tilde c_{2,i}=h_i^tg^{\alpha_i}$. Output $ \ct'\leftarrow\shrink_\mathsf{DDH}(\pk,\tilde \ct)$.
+\end{itemize}
+\end{description}
+
+We now show that simulated ciphertexts are statistically indistinguishable from the ones output by $\eval$. 
+
+Let $\ct_i=(g^{r_i},(h_1^{r_i}g^{m_{1,i}},\dots,h_k^{r_i}g^{m_{k,i}})$. The output of $\eval$ is $(\tilde c_1,(\tilde c_{2,1},\dots, \tilde c_{2,k}))$ where $$\tilde c_1=g^{\sum_i^\ell \left(r_i\left\lceil a_i\frac{p}{2}\right\rfloor_\sigma - r_i\left\lceil 0\right\rfloor_\sigma\right) + t}$$ and $$\tilde c_{2,j}=h^{\sum_i^\ell \left(r_i\left\lceil a_i\frac{p}{2}\right\rfloor_\sigma - r_i\left\lceil 0\right\rfloor_\sigma\right) + t}\cdot g^{\sum_i^\ell \left(m_{j,i}\left\lceil a_i\frac{p}{2}\right\rfloor_\sigma +(1-m_{j,i})\left\lceil 0\right\rfloor_\sigma\right) + \left\lceil b_i\frac{p}{2}\right\rfloor_\sigma}.$$
+
+
+By Lemma \ref{lemma:CompfriendlySubgroupEmulation} we have that $$\sum_{i=1}^\ell  \left(m_{j,i}\left\lceil a_i\frac{p}{2}\right\rfloor_\sigma +(1-m_{j,i})\left\lceil 0\right\rfloor_\sigma\right) + \left\lceil b_i\frac{p}{2}\right\rfloor_\sigma\approx_s \left\lceil \tilde m_j \frac{p}{2}\right\rfloor_{\sqrt{2\ell+1}\sigma}$$ where $\tilde m_j$ is the $j$-th coordinate of $f(\mn_1,\dots, \mn_\ell)$. Hence, $$g^{\sum_{i=1}^\ell  \left(m_{j,i}\left\lceil a_i\frac{p}{2}\right\rfloor_\sigma +(1-m_{j,i})\left\lceil 0\right\rfloor_\sigma\right) + \left\lceil b_i\frac{p}{2}\right\rfloor_\sigma}\approx_s g^{\left\lceil f(\mn_1,\dots,\mn_\ell) \frac{p}{2}\right\rfloor_{\sqrt{2\ell+1}\sigma}}.$$ Moreover, since $t\sample \ZZ_p$ then $$(g^{z+t},h^{z+t})\approx_s(g^t,h^t)$$ for any $z\in\ZZ_p$. We conclude that $$(\tilde c_1,(\tilde c_{2,1},\dots, \tilde c_{2,k}))\approx_s (g^t,(h_1^tg^{\alpha_1},\dots, h_k^tg^{\alpha_k})$$ where $\alpha_i=\left\lceil \tilde m_i\frac{p}{2}\right\rfloor_{\sqrt{2\ell+1}\sigma}$.
+\end{proof}
+
+
+\paragraph{Larger plaintext space.} As in the LWE case, in the construction presented above, the plaintext space is $\ZZ_2^k$. Both the shrinking algorithm and the function-private LHE schemes can be extended to support plaintext space $\ZZ_q^k$ where $q=\poly[\lambda]$ and $q=2^\nu$ for some $\nu\in\ZZ$ (the constrain of $q$ being a power of $2$ comes from Lemma \ref{lemma:CompfriendlySubgroupEmulation})
+
+
+
+
+
+\subsection{Construction from QR}
+
+The scheme presented in this section is the packed version of the scheme from \cite{C:BraGol10} together with the shrinking technique from \cite{C:DGIMMO19}. 
+
+
+In the following, let $N$ is a Blum integer if $N = p \cdot q$ for some primes $p$ and $q$ such that $p ~(\text{mod } 4) = q ~(\text{mod } 4) = 3$. Moreover, we say $p$ and $q$ are safe primes if $p=2p'+1$ and $q=2q'+1$ for some prime numbers $p',q'$. We denote by $\J_N$ the multiplicative group of the elements in $\ZZ_N^*$ with Jacobi symbol $+1$ and by $\QR_N$ the multiplicative group of quadratic residues modulo $N$ with generator $g$. Note that $\QR_N$ is a subgroup of $\J_N$ and they have order $\frac{\varphi(N)}{4}$ and $\frac{\varphi(N)}{2}$, respectively, where $\varphi(\cdot)$ is Euler's totient function. It is useful to write $\J_N \simeq \mathbb{H} \times \QR_N$, where $\mathbb{H}$ is the multiplicative group $(\pm 1, \cdot)$ of order $2$. Note that if $N$ is a Blum integer then $\gcd\left(2, \frac{\varphi(N)}{4}\right) = 1$ and $-1 \in \J_N \setminus \QR_N$. We recall the quadratic residuosity (QR) assumption~\cite{STOC:GolMic82}.
+
+\begin{definition}[Quadratic Residuosity Assumption]
+ Let $N$ be a uniformly sampled Blum integer and let $\QR_N$ be the multiplicative group of quadratic residues modulo $N$ with generator $g$. We say the QR assumption holds with respect to $\QR_N$ if for any PPT adversary $\mathcal{A}$ %there exists a negligible function $\negl[]$ such that
+\[\left|\Pr[1\leftarrow\mathcal{A}(N, g, a) ] - \Pr[1\leftarrow\mathcal{A}(N, g, (-1)\cdot a)]\right| \leq \negl[\lambda]\] where $a \sample \QR_N$.
+\end{definition}
+
+
+
+\subsubsection{Shrinking ciphertexts.} We recall the shrinking mechanism of \cite{C:DGIMMO19}. Let a (packed) ciphertext $\ct=(g^r,(-1)^{b_1} h_1^r, \dots, (-1)^{b_k} h_k^r)=(c_1, c_{2,1},\dots, c_{2,k})$ and let $<$ be an order over $\J_N$ (e.g., the lexicographic order). The shrinking mechanism of \cite{C:DGIMMO19} simply outputs $0$ if $c_{2,i}<-c_{2,i}$ and outputs $1$ otherwise. 
+
+\begin{lemma}[\cite{C:DGIMMO19}]
+\label{lemma:ShrinkQR}
+There exists a correct shrinking procedure $\mathsf{Shrink}_{\mathsf{QR}},\mathsf{DecShrink}_{\mathsf{QR}}$ for the packed QR-based PKE.
+\end{lemma}
+
+\subsubsection{Circuit-private LHE from QR.}
+We now present the scheme which is essentially the same as the one from \cite{C:BraGol10} together with the shrinking technique of Lemma \ref{lemma:ShrinkQR}. 
+
+In the following, let $(\mathsf{Shrink}_{\mathsf{QR}},\mathsf{DecShrink}_\mathsf{QR})$ be the pair of algorithms from Lemma \ref{lemma:ShrinkQR}.
+
+\begin{description}
+\item[$\mathsf{KeyGen}(1^\lambda,k):$]~
+\begin{itemize}
+    \item Choose two safe primes $p=2p'+1$ and $q=2q'+1$ where $p',q'$ are primes and compute $N=pq$. Choose a generator $g$ of $\QR_N$.
+    \item Sample $\sn\sample \ZZ_{\phi(N)/2}^k$ and compute $\hn=g^\sn$.
+    \item Output $\pk=(N,g,\hn)$ and $\sk=\sn$.
+\end{itemize}
+
+\item[$\mathsf{Enc}(\pk,\mn=(m_1,\dots, m_k)):$]~
+\begin{itemize}
+    \item Parse $\pk$ as $(N,g,\hn=(h_1,\dots ,h_k))$.
+    \item Sample $r\sample \ZZ_{(N-1)/2}$. Compute $c_1=g^r$ and $c_{2,i}=(-1)^{m_i}h_i^r$ for $i\in[k]$.
+    \item Output $\ct=(c_1,\cn_2=(c_{2,1},\dots,c_{2,k}) )$.
+\end{itemize}
+
+\item[$\mathsf{Eval}(\pk,f, (\ct_1,\dots, \ct_\ell))$]~
+\begin{itemize}
+    \item Parse $\pk$ as $(N,g,\hn=(h_1,\dots ,h_k))$, $f$ as $f(\xn_1,\dots, \xn_\ell)=\sum_{j=1}^\ell a_j\xn_j+\bn$, where $a_1,\dots,a_\ell\in \ZZ_2$, $\bn\in\ZZ_2^k$ and $\ct_j$ as $(c_{1,j},\cn_{2,j}=(c_{2,1,j},\dots,c_{2,k,j}) )$.%\pedro{Fix this, write this as in LWE}
+    \item Compute $\tilde \ct=(\tilde c_1,\tilde \cn_2=(\tilde c_{2,1},\dots,\tilde c_{2,k} ))$ where $\tilde c_1=g^t\prod_{j=1}^\ell c_{1,j}^{a_j}$ and $\tilde c_{2,i}=h_i^t\cdot(-1)^{b_i}\cdot\prod_{j=1}^\ell c_{2,i,j}^{a_j}$ where $t\sample \ZZ_{(N-1)/2}$.  Output $\tilde \ct$.
+\end{itemize}
+
+\item[$\mathsf{Shrink}(\pk,\ct):$]~ Output $\tilde \ct\leftarrow\mathsf{Shrink}_\mathsf{QR}(\pk,\ct)$.
+
+\item[$\mathsf{DecShrink}(\sk,\ct):$] Output $\mn\leftarrow\mathsf{DecShrink}_\mathsf{QR}(\sk,\ct)$. 
+\end{description}
+
+It is easy to see that correctness and compactness hold due to Lemma \ref{lemma:ShrinkQR}. Semantic security also follows easily from the QR assumption.
+
+
+To see that the scheme is circuit private, note that $g^{(\sum_j r_j a_j )+ t}\approx_s g^{t}$ for a uniformly chosen $t\sample \ZZ_{(N-1)/2}$ (this holds since the uniform distribution over $\ZZ_{(N-1)/2}$ is statistically indistinguishable from the uniform distribution over $\ZZ_{\phi(N)/2}$). Similarly, we have that $h_i^{(\sum_j r a_j) +t} \approx_s h_i^t$. Thus, $$\left(g^{(\sum_j r_j a_j) + t},(-1)^{f(\mn)}h^{(\sum_j r_j a_j) +t}\right)\approx_{s} \left(g^t,(-1)^{f(\mn)}h^t\right)$$ and, thus, the distributions of an evaluated ciphertext and a fresh ciphertext are statistically indistinguishable.
+
+\section{Co-Private Information Retrieval}
+\label{sec:coOT}
+
+In this section, we present a new cryptographic primitive that we call \emph{co-PIR}. In a co-PIR scheme, a receiver (with input a set of indices $S$) and a sender (with no input) interact such that, in the end, the sender obtains a string $\yn\in\ZZ_q^m$ and the receiver obtains  $\yn_{-S}$ (all positions of $y$ except for the indices in $S$). 
+
+In terms of security, we require that the sender learns nothing about $S$, whereas  the string $\yn_{S}$ looks pseudorandom to the receiver. In terms of efficiency, we require that the total communication of the protocol scales only with $|S|\poly[\lambda]\mathsf{polylog}(m)$ (that is, it scales only poly-logarithmically with  $m$). 
+%We present a construction for Co-PIR from the distributed GGM-PPRF correlation (as shown in \cite{CCS:BCGIKRS19}) in Appendix E.1 of the full version paper;
+%We also present another construction with black-box usage of PPRF and PIR in Appendix E.2 of the full version paper.
+
+
+
+\subsection{Definition}
+We start by defining Co-PIR and presenting its security properties.
+
+\begin{definition}[Co-PIR]
+A (two-round) Co-PIR  scheme $\CoPIR$ over $\ZZ_q$ is parametrized by an integer $m$ where $m=\mathsf{poly}[\lambda]$, and is composed by a tuple of algorithms $(\query,\send,\retrieve)$ such that
+\begin{itemize}
+    \item $\query(1^\lambda,S)$ takes as input a set of indices $S\subseteq [m]$. It outputs a message $\copir_1$ and a private state $\st$.
+    \item $\send(\copir_1)$ takes as input a first message $\copir_1$. It outputs a second message $\copir_2$ and a string $\yn\in\ZZ_q^m$.
+    \item $\dec(\copir_2,\st)$ takes as input a second message $\copir_2$ and a state $\st$. It outputs a string $\tilde \yn\in\ZZ_q^{m}$.
+\end{itemize}
+\end{definition}
+
+\begin{definition}[Correctness]
+A Co-PIR scheme $\CoPIR$ is said to be correct if for any $m=\poly[\lambda]$ and $S\subseteq [m]$ we have that $$\Pr\left[ \yn_{[m]\setminus S}=\tilde  \yn_{[m]\setminus S}:\begin{array}{c}
+     (\copir_1,\st)\leftarrow\query(1^\lambda,S) \\
+    (\copir_2,\yn)\leftarrow \send(\copir_1) \\
+   \tilde  \yn\leftarrow \retrieve(\copir_2,\st)
+\end{array}\right]=1.$$ In other words, the strings $\yn$ and $\tilde \yn$ match for every coordinate $i\in[m]\setminus S$.
+\end{definition}
+
+In terms of security, we require two properties: receiver security and sender security.
+
+
+\begin{definition}[Receiver security]
+A Co-PIR scheme $\CoPIR$ is said to be receiver secure if for all $m=\poly[\lambda]$, any subsets $S_1,S_2\subseteq[m]$ we have that for any adversary $\Ac$ $$\left|\begin{array}{c}
+      \Pr\left[1\leftarrow\Ac(k,\copir_1):(\copir_1,\st)\leftarrow\query(1^\lambda,S_1) \right]- \\
+     \Pr\left[1\leftarrow\Ac(k,\copir_1):(\copir_1,\st)\leftarrow\query(1^\lambda,S_2) \right]
+\end{array}\right|\leq \negl[\lambda].$$
+\end{definition}
+
+
+
+\begin{definition}[Sender security]
+A Co-PIR scheme $\CoPIR$ is said to be sender secure if for any $m=\poly[\lambda]$, any subset $S\subseteq[m]$ we have that for all adversaries $\Ac$ $$\left|
+    \begin{array}{c}
+         \Pr\left[1\leftarrow\Ac(k,\st,\copir_2,\yn_S):\begin{array}{c}
+          (\copir_1,\st)\leftarrow\query(1^\lambda,S)  \\
+         (\copir_2,\yn)\leftarrow \send(\copir_1,\xn)  
+    \end{array}
+    \right]-  \\
+          \Pr\left[1\leftarrow\Ac(k,\st,\copir_2, \yn_S'):\begin{array}{c}
+          (\copir_1,\st)\leftarrow\query(1^\lambda,S)  \\
+         (\copir_2,\yn)\leftarrow \send(\copir_1,\xn)  \\
+          \yn_S'\sample \ZZ_q^{|S|}
+    \end{array} \right] 
+    \end{array}\right|\leq \negl[\lambda].
+   $$
+\end{definition}
+
+
+
+\begin{definition}[Compactness]
+A Co-PIR scheme $\CoPIR$ is said to be compact if $|\copir_1|,|\copir_2|=|S|\cdot \mathsf{polylog}(m)\cdot\poly[\lambda]$ for any $S\subseteq[m]$ where $ (\copir_1,\st)\leftarrow\query(1^\lambda,S)$ and $(\copir_2,\yn)\leftarrow \send(\copir_1) $. In other words, the communication complexity depends only on poly-logarithmically in $m$.
+\end{definition}
+
+
+
+\subsection{Co-PIR from Distributed GGM-PPRF Correlation}
+\label{subsec:COPIRfromGGM}
+
+We now present a scheme for Co-PIR from the distributed GGM-PPRF correlation which is proposed by Boyle et al. \cite{CCS:BCGIKRS19}. For the sake of simplicity, we present the scheme for $q=2$. Let $\PPRF_\mathsf{GGM} = (\keygen,\eval,\puncture,\evalpunct)$ be a GGM puncturable PRF which maps from $[m]$ to $\bin$ and let $\PPRFGGM=(\Rs_1,\Ss,\Rs_2)$ be a distributed GGM-PPRF correlation scheme.
+
+
+\begin{description}
+\item[$\query(1^\lambda,S):$]~
+\begin{itemize}
+    \item Parse $S=\{a_1,\dots, a_t\}\subseteq [m]^t$ where $t=|S|$.
+    \item For $j\in[t]$ compute $(\pprfggm_{1,j},\state_j)\leftarrow \PPRFGGM.\Rs_1(\bar a_j)$.
+    \item Output $\copir_1=\{\pprfggm_{1,j}\}_{j\in[t]}$ and $\st=\{\state_j\}_{j\in[t]}$.
+\end{itemize}
+
+
+\item[$\send(\copir_1):$]~
+\begin{itemize}
+    \item Parse $\copir_1=\{\pprfggm_{1,j}\}_{j\in[t]}$.
+    \item For $j\in[t]$ compute $\key_j\leftarrow\PPRF_\mathsf{GGM}.\keygen(1^\lambda)$ and $\zn_j\leftarrow\PPRF_\mathsf{GGM}.\eval(\key_j,\ast)$.
+    \item For $j\in[t]$ compute $\pprfggm_{2,j}\leftarrow\PPRFGGM.\Ss(0,\key_j,\pprfggm_1)$.
+  \item Output $\copir_2=\{\pprfggm_{2,j}\}_{j\in[t]}$ and $\yn=\sum_{i=1}^t\zn_j$
+
+\end{itemize}
+
+\item[$\dec(\copir_2,\st):$]~
+\begin{itemize}
+    \item Parse $\copir_2=\{\pprfggm_{2,j}\}_{j\in[t]}$  and $\st=\{\state_j\}_{j\in[t]}$.
+    \item For $j\in[t]$ compute $\bar{\key}_j\leftarrow\PPRFGGM.\Rs_2(\state_j,\pprfggm_{2,j})$.
+    \item For $i\in[m]\setminus S$, set $\tilde y_i=\sum_{i=1}^t \PPRF_\mathsf{GGM}.\evalpunct(\bar{\key}_j,i)$. For $i\in S$, set $\tilde y_i=0$. Output $\tilde \yn=(\tilde y_1\dots, \tilde y_m)$.% \{y_i\}_{i\in[k]\setminus S}$.
+\end{itemize}
+\end{description}
+
+
+We now analyze the scheme presented above starting with correctness.
+
+\begin{lemma}[Correctness]
+\label{lemma:correct-pprf-ggm}
+Assume that $\PPRFGGM$ and $\PPRF$ are correct. Then the scheme presented above is correct
+\end{lemma}
+\begin{proof}
+We have to prove that $\tilde \yn_{[m]\setminus S}=\yn_{[m]\setminus S}$. Let $\yn=(y_1,\dots ,y_m)\in\bin^m$. Note that $y_i=\sum_{j=1}^t \PPRF.\eval(\key_j,i) $.
+
+First, by the correctness of the underlying distributed GGM-PPRF correlation scheme, $\bar{\key}_j\leftarrow\mathsf{PPRF.Punct}(a_j)$ for all $j\in[t]$ and $a_j\in S$. Also, $$\tilde y_i=\sum_{j=1}^t \PPRF_\mathsf{GGM}.\evalpunct(\bar\key_j,i)$$ for all $i\in [m]\setminus S$. By the correctness of the PPRF, $\PPRF_\mathsf{GGM}.\evalpunct(\bar \key_{j},i)=\PPRF_\mathsf{GGM}.\evalpunct( \key_j,i)$ for all $i \in [m]\setminus S$. Then $\tilde y_i=y_i$ for all $i\in [m]\setminus S$.
+\end{proof}
+
+
+
+\begin{lemma}[Receiver security]
+Assume that $\PPRFGGM$ implements $\funcPPRFGGM$. Then the scheme presented above is receiver secure.
+\end{lemma}
+The proof follows directly from the receiver security of $\PPRFGGM$.
+
+
+\begin{lemma}[Sender security]
+\label{lemma:send-sec-pprf-ggm}
+Assume that $\PPRFGGM$ implements $\funcPPRFGGM$ and $\PPRF$ is a pseudorandom PPRF. Then the scheme presented above is sender secure.
+\end{lemma}
+\begin{proof}
+Let $\Sim_\PPRFGGM$ be the simulator of $\PPRFGGM$ for sender security. The proof of security follows the following sequence of hybrids.
+\begin{description}
+\item[Hybrid $\Hc_0$.] This is the real protocol.
+\end{description}
+
+For all $j\in[t]$ consider the following sub-hybrids.
+\begin{description}
+\item[Hybrid $\Hc_{1,j}$.] In this hybrid, we replace $\pprfggm_{2,j}$ by the message generated by $\Sim_\PPRFGGM$. Indistinguishability of hybrids follows from the sender security of $\PPRFGGM$.
+\item[Hybrid $\Hc_{2,j}$.]  In this hybrid, we replace $\PRF_\mathsf{GGM}.\eval(\key_j,a_j)$ by a uniform bit $u_{j}\sample \bin$. Indistinguishability of hybrids follows from the pseudorandomness of $\PPRF$.
+\item[Hybrid $\Hc_{3,j}$.] In this hybrid, we replace $y_{a_j}$ by $v_j\sample \bin$. Statistical indistinguishability follows because $$y_{a_j}=\sum_{i=1}^t \PPRF_\mathsf{GGM}.\eval(\key_i,{a_j})=\sum_{i=1,i\neq j}^t \PPRF_\mathsf{GGM}.\eval(\key_i,{a_j}) + u_{j}\approx_s v_j.$$ 
+ \end{description}
+ Finally, note that in hybrid $\Hc_{3,t}$ the string $\yn_S$ is uniformly random to the receiver and we conclude the proof 
+\end{proof}
+
+
+\paragraph{Compactness.} To conclude, we analyze compactness of the scheme. Assuming that the distributed GGM-PPRF correlation scheme has polynomial communication complexity in $|a_j|=\log m$ and in $\lambda$,  and $|S|=t$, we conclude that the receiver's and the sender's message are of size $t\cdot\poly[\lambda]\cdot\mathsf{polylog}(m)$.
+
+\paragraph{Extending to Co-PIR over any $\ZZ_q$.} The scheme can be easily extended to any $q$ by taking a $\PPRF$ that maps $x\in[m] $ to $\ZZ_q$. It is easy to see that the resulting scheme has total communication complexity of $t\cdot\poly[\lambda]\cdot\mathsf{polylog}(m,q)$.
+
+\paragraph{Hardness assumptions for Co-PIR.} Since the distributed GGM-PPRF correlation scheme and the GGM-PPRF can be based on LWE, DDH or QR assumptions (using only black-box techniques), then the Co-PIR scheme presented above can also be based on these assumptions. Moreover, the resulting scheme uses only black-box techniques.
+
+
+
+\subsection{Co-PIR from PPRF and PIR}
+\label{app:CoPIRfromPPRandPIR}
+The construction for Co-PIR from Section \ref{sec:coOT} uses a distributed GGM-PPRF correlation scheme which can be built from a GGM-PPRF and an OT. 
+In this section, we present a construction for Co-PIR from any PPRF (not necessarily the GGM-PPRF) and a PIR in a black-box way.
+
+
+\subsubsection{The Protocol}
+For the sake of simplicity, we present the scheme for $q=2$. 
+
+For our Co-PIR construction, we will need the following ingredients: Let $\PIR=(\query,\send,\retrieve)$ be a PIR scheme with poly-logarithmic communication complexity and sender privacy and let $\PPRF = (\keygen,\eval,\puncture,\evalpunct)$ be a puncturable PRF which maps from $[m]$ to $\bin$. We use the notation $\PPRF.\eval(\key,\ast)$ to denote the vector $(\PPRF.\eval(\key,1),\dots,\PPRF.\eval(\key,m)) \in \bin^m$.
+
+\begin{description}
+\item[$\query(1^\lambda,S):$]~
+\begin{itemize}
+    \item Parse $S=\{a_1,\dots, a_t\}$ where $t=|S|$.
+    \item For $j\in[t]$ compute $(\quer_j,\state_j)\leftarrow\PIR.\query(a_j)$.
+    \item Output $\copir_1=\{\quer_j\}_{j\in[t]}$ and $\st=\{\state_j\}_{j\in[t]}$.
+\end{itemize}
+
+
+\item[$\send(\copir_1):$]~
+\begin{itemize}
+    \item Parse $\copir_1=\{\quer_j\}_{j\in[t]}$.
+    \item For $j\in[t]$ compute $\key_j\leftarrow\PPRF.\keygen(1^\lambda)$ and $\zn_j\leftarrow\PPRF.\eval(\key_j,\ast)$.
+    \item For $i\in[j]$ and $\ell\in[m]$, set $\dot{\key}_{j,\ell}\leftarrow\PPRF.\puncture(\key_j,\ell)$.
+    \item For $j\in[t]$ set ${\DBn}_j=(\dot{\key}_{j,1},\dots, \dot{\key}_{j,m})$. Compute  $\resp_j\leftarrow\PIR.\send({\DBn}_j,\quer_j)$. 
+  \item Output $\copir_2=\{\resp_j\}_{j\in[t]}$ and $\yn=\sum_{i=1}^t\zn_j$
+
+\end{itemize}
+
+\item[$\dec(\copir_2,\st):$]~
+\begin{itemize}
+    \item Parse $\copir_2=\{\resp_j\}_{j\in[t]}$  and $\st=\{\state_j\}_{j\in[t]}$.
+    \item For $j\in[t]$ compute $\bar{\key}_j\leftarrow\PIR.\retrieve(\resp_j,\state_j)$.
+    \item For $i\in[k]\setminus S$, set $\tilde y_i=\sum_{i=1}^t \PPRF.\evalpunct(\bar{\key}_j,i)$. For $i\in S$, set $\tilde y_i=0$. Output $\tilde \yn=(\tilde y_1\dots, \tilde y_m)$.% \{y_i\}_{i\in[k]\setminus S}$.
+\end{itemize}
+\end{description}
+
+
+
+
+\subsubsection{Analysis}
+
+
+We now analyze the scheme presented above starting with correctness.
+
+\begin{lemma}[Correctness]
+Assume that $\PIR$ and $\PPRF$ are correct. Then the scheme presented above is correct
+\end{lemma}
+\begin{proof}
+We have to prove that $\tilde \yn_{[k]\setminus S}=\yn_{[k]\setminus S}$. Let $\yn=(y_1,\dots ,y_m)\in\bin^m$. Note that $y_i=\sum_{j=1}^t \PPRF.\eval(\key_j,i) $.
+
+First, by the correctness of the underlying PIR scheme, $\bar{\key}_j=\dot{\key}_{j,a_j}$ for all $j\in[t]$ and $a_j\in S$. Also, $$\tilde y_i=\sum_{j=1}^t \PPRF.\evalpunct(\bar\key_j,i)=\sum_{i=1}^t \PPRF.\evalpunct(\dot \key_{j,a_j},i)$$ for all $i\in [k]\setminus S$. By the correctness of the PPRF, $\PPRF.\evalpunct(\dot \key_{j,a_j},i)=\PPRF.\evalpunct( \key_j,i)$ for all $i \in [k]\setminus S$. Then $\tilde y_i=y_i$ for all $i\in [k]\setminus S$.
+\end{proof}
+
+
+\begin{lemma}[Receiver security]
+Assume that $\PIR$ is user secure. Then the scheme presented above is receiver secure.
+\end{lemma}
+The proof follows from a simple reduction from the receiver security of $\CoPIR$ to user security of $\PIR$.
+
+
+
+\begin{lemma}[Sender security]
+Assume that $\PIR$ is sender secure and $\PPRF$ is a pseudorandom PPRF. Then the scheme presented above is sender secure.
+\end{lemma}
+\begin{proof}
+The proof of security follows the following sequence of hybrids.
+\begin{description}
+\item[Hybrid $\Hc_0$.] This is the real protocol.
+\end{description}
+
+For all $j\in[t]$ consider the following sub-hybrids.
+\begin{description}
+\item[Hybrid $\Hc_{1,j}$.] In this hybrid, we replace ${DB}_j$ by $\overline{DB}_j$ which is $0$ everywhere but its $a_j$-th coordinate is equal to $DB_{j,a_j}$. Indistinguishability of hybrids follows from the sender security of $\PIR$.
+\item[Hybrid $\Hc_{2,j}$.]  In this hybrid, we replace $\PRF.\eval(\key_j,a_j)$ by a uniform bit $u_{j}\sample \bin$. The indistinguishability of hybrids follows from the pseudorandomness of $\PPRF$.
+\item[Hybrid $\Hc_{3,j}$.] In this hybrid, we replace $y_{a_j}$ by $v_j\sample \bin$. Statistical indistinguishability follows because $$y_{a_j}=\sum_{i=1}^t \PPRF.\eval(\key_i,{a_j})=\sum_{i=1,i\neq j}^t \PPRF.\eval(\key_i,{a_j}) + u_{j}\approx_s v_j.$$ 
+ \end{description}
+ Finally, note that in hybrid $\Hc_{3,t}$ the string $\yn_S$ is uniformly random to the receiver and we conclude the proof 
+\end{proof}
+
+\paragraph{Compactness.} To conclude, we analyze the compactness of the scheme. Assuming that the PIR scheme has poly-logarithmic communication complexity and $|S|=t$, we conclude that the receiver's and the sender's message are of size $t\cdot\poly[\lambda]\cdot\mathsf{polylog}(m)$.
+
+\section{Oblivious Transfer with Overall Rate 1}
+\label{sec:rate1OTwithCoPIR}
+
+We will now provide our construction of an oblivious transfer protocol with an overall rate-1.
+
+\paragraph{Ingredients.} We will make use of the following ingredients.
+\begin{itemize}
+    \item A packed linearly homomorphic encryption scheme $\LHE = (\keygen,\enc,$ $\eval,\shrink,\decshrink)$ with plaintext space $\bin^\ell$ and a post homomorphism shrinking procedure $\shrink$ which converts ciphertexts into a rate 1 representation.\footnote{Recall that we use the notation $\evalshrink$ to denote the composition of algorithms $\eval$ and $\shrink$.}
+    
+    
+    \item The binary $\LPN(n,m,\rho)$ problem with dimension $n = \poly$, $m = n \cdot \ell \cdot \poly$ samples and slightly sub-constant noise-rate $\rho = m^{1 - \epsilon}$.
+    \item A 2-round PIR scheme $\PIR = (\query,\send,\retrieve)$ with poly-logarithmic communication complexity and sender privacy.
+    \item A 2-round Co-PIR scheme $\CoPIR=(\query,\send,\retrieve)$ over $\ZZ_2$ parametrized by $m$.
+\end{itemize}
+
+\paragraph{Additional Notation.} Furthermore, to declutter notation we define the following embedding functions.
+\begin{description}
+\item[$\RowMatrix(\ell,n,\vc{v}_1,\dots,\vc{v}_\ell)$:] Takes row-vectors $\vc{v}_1,\dots,\vc{v}_\ell \in \bin^n$ and outputs a matrix
+\[
+\vc{V} = \left(\begin{matrix}\text{---} & \vc{v}_1 & \text{---} \\ &\vdots& \\ \text{---} & \vc{v}_\ell & \text{---} \end{matrix}\right),
+\]
+i.e. for every $i \in [\ell]$ the $i$-th row of $\vc{V}$ is the row-vector $\vc{v}_i$.
+
+\item[$\SingleRowMatrix(\ell,n,i,\vc{v})$:] Takes a row-vector $\vc{v} \in \bin^n$ and outputs a matrix
+\[
+\vc{V} = \left(\begin{matrix} 0 & \dots & 0 \\ \vdots & & \vdots \\ 0 & \dots & 0 \\ \text{---} & \vc{v} & \text{---} \\ 0 & \dots & 0 \\ \vdots & & \vdots \\ 0 & \dots & 0 \end{matrix}\right),
+\]
+i.e. the $i$-th row of $\vc{V}$ is $\vc{v}$, but $\vc{V}$ is 0 everywhere else.
+
+\item[$\Diag(n,\vc{v})$:] Takes a vector $\vc{v} = (v_1,\dots,v_n) \in \bin^n$ and outputs a matrix
+\[
+\vc{D} = \left( \begin{matrix} v_1 & & 0 \\
+    & \ddots &  \\
+    0 & & v_n\end{matrix}\right),
+\]
+i.e. $\vc{D} \in \bin^{n \times n}$ is a diagonal matrix with the components of $\vc{v}$ on its diagonal.
+\end{description}
+
+We observe the following:
+\begin{itemize}
+    \item For any $\vc{v}_1,\dots,\vc{v}_\ell \in \bin^n$ it holds that
+    \[
+    \RowMatrix(\ell,n,\vc{v}_1,\dots,\vc{v}_\ell) = \sum_{i = 1}^\ell \SingleRowMatrix(\ell,n,i,\vc{v}_i).
+    \]
+    \item For $\vc{x},\vc{y} \in \bin^n$ it holds that
+    \[
+    \vc{x} \cdot \Diag(n,\vc{y}) = \vc{x} \odot \vc{y},
+    \]
+    where $\odot$ denotes component-wise multiplication.
+\end{itemize}
+
+
+\subsection{The Protocol}
+\label{subsec:OTprotocol}
+
+The protocol $\OT = (\OTR,\OTS,\OTD)$ is given as follows.
+\begin{description}
+\item[$\OTR(\vc{b} \in \bin^{m \ell}):$]~
+\begin{itemize}
+    \item Parse $\vc{b} = (\vc{b}_1,\dots,\vc{b}_\ell)$, where the $\vc{b}_i \in \bin^m$ are blocks of size $m$.
+    \item Choose $\vc{A}\sample \bin^{n\times m}$ uniformly at random and compute a pair of public and secret key $(\pk,\sk)\gets\LHE.\keygen(1^\secpar,\ell)$.
+    \item For all $i\in[\ell]$, choose $\vc{s}_i \sample \bin^n$, and $\en_i \sample \errordist_{m,t}$, compute $\vc{c}_i \gets \vc{s}_i\vc{A}+\vc{e}_i+\bn_i$, and set $\vc{S}_i \gets \SingleRowMatrix(\ell,n,i,\vc{s}_i)$. Compute a matrix-ciphertext $\ct_i \gets \LHE.\enc(\pk,\vc{S}_i)$.
+    \item For all $i\in[\ell]$ set $J_i = \supp(\vc{e}_i)$ to be the support of $\vc{e}_i$. Compute $(\copir_{1,i},\st_i)\gets \CoPIR.\query(J_i)$. Additionally, for $j \in [t]$ compute $(\quer_{i,j},\hat{\st}_{i,j}) = \PIR.\query(J_i[j])$.
+     \item Output $\ot_1=\left(\pk,\vc{A},\{\ct_i, \vc{c}_i,\copir_{1,i}\}_{i\in [\ell]},\{\quer_{i,j}\}_{i \in [\ell], j \in [t]}\right)$ and $\st = (\sk,\{\st_i,J_i\}_{i \in [\ell]},\{\hat{\st}_{i,j}\}_{i \in [\ell], j \in [t]]})$.
+\end{itemize}
+
+\item[$\OTS((\vc{m}_0,\vc{m}_1) \in (\bin^{m \ell})^2,\ot_1):$]~
+\begin{itemize}
+    \item Parse $\vc{m}_0 = (\vc{m}_{0,1},\dots,\vc{m}_{0,\ell})$ and $\vc{m}_1 = (\vc{m}_{1,1},\dots,\vc{m}_{1,\ell})$, where each $\vc{m}_{b,i} =(m_{b,i,1},\dots, m_{b,i,m})\in \bin^m$. Parse $\ot_1=\left(\pk,\vc{A},\{\ct_i, \vc{c}_i,\copir_{1,i}\}_{i\in [\ell]},\{\quer_{i,j}\}_{i \in [\ell], j \in [t]}\right)$.
+    \item For $i \in [\ell]$ $(\yn_i,\copir_{2,i})\gets \CoPIR.\send(\copir_{1,i})$ where $\yn_i=(y_{i,1},\dots, y_{i,m})$. Set $\vc{z}_i = \vc{m}_{0,i} + \yn_i$.
+    \item Set $\vc{Z} = \RowMatrix(\ell,m,\vc{z}_1,\dots,\vc{z}_\ell)$.
+    \item For all $i \in [\ell]$ set $\vc{C}_i = \SingleRowMatrix(\ell,m,i,\vc{c}_i)$ and $\vc{D}_i = \Diag(m,\vc{m}_{1,i} - \vc{m}_{0,i})$.
+    \item Define the $\ZZ_2$-linear function $f: (\bin^{\ell \times n})^\ell \to \bin^{\ell \times m}$ via
+    \[
+    f(\vc{X}_1,\dots,\vc{X}_\ell)=\left( \sum_{i = 1}^\ell (-\vc{X}_i\vc{A} + \vc{C}_i)\cdot \vc{D}_i \right) + \vc{Z}.
+    \]
+    \item Compute $\tilde \ct \gets \LHE.\evalshrink(\pk,f,\ct_1,\dots,\ct_\ell)$.
+    \item For $i \in [\ell]$ set ${DB}_i=(y_{i,1}+(m_{1,i,1}-m_{0,i,1}),\dots,y_{i,m}+(m_{1,i,m}-m_{0,i,m}) )$. For all $j \in [t]$  compute $\resp_{i,j} \gets \PIR.\send(DB_{i},\quer_{i,j})$.
+    \item Output $\ot_2=\left(\tilde{\ct},\{\copir_{2,i}\}_{i\in[\ell]}, \{\resp_{i,j}\}_{i \in [\ell], j \in [t]} \right)$.
+\end{itemize}
+
+\item[$\OTD(\ot_2,\st)$:]~
+\begin{itemize}
+    \item Parse $\ot_2=\left(\tilde{\ct},\{\copir_{2,i}\}_{i\in[\ell]}, \{\resp_{i,j}\}_{i \in [\ell], j \in [t]} \right)$ and  $\st = (\sk,\{\st_i,J_i\}_{i \in [\ell]},\{\hat{\st}_{i,j}\}_{i \in [\ell], j \in [t]]})$.
+    \item For all $i\in[\ell]$ compute $\tilde \yn_i=(\tilde y_{i,1},\dots, \tilde y_{i,m})\leftarrow\CoPIR.\retrieve(\copir_{2,i},\st_i)$.
+    \item For $i \in [\ell]$ and $j \in [t]$ compute $\tilde{z}_{i,j} \gets \PIR.\retrieve(\resp_{i,j},\hat{\st}_{i,j})$.
+    \item For $i\in [\ell]$ set $\zn_i=(z_{i,1},\dots, z_{i,m})$ where  
+    \[
+    z_{i,l} = \begin{cases}\tilde{z}_{i,j} & \text{ if } l = J_i[j] \\ \tilde y_{i,\ell} & \text{ otherwise} \end{cases}.
+    \]
+    \item Set $\vc{Z} = \RowMatrix(\ell,m,\vc{z}_1,\dots,\vc{z}_\ell)$.
+    \item Compute $\tilde{\vc{W}} \gets \LHE.\decshrink(\sk,\tilde{\ct})$ and $\vc{W} = \tilde{\vc{W}} - \vc{Z}$.
+    \item Let $\wn_1,\dots,\wn_\ell$ be the rows of $\vc{W}$. Output $\wn = (\wn_1 \| \dots \| \wn_\ell) \in \bin^{m \ell}$.
+\end{itemize}
+\end{description}
+
+\paragraph{Correctness.} We will first show that $\OT$ is correct, given that $\LHE$, $\CoPIR$ and $\PIR$ are correct. 
+
+
+\begin{theorem}
+\label{theor:correctOT}
+Assume that $\LHE$, $\CoPIR$ and $\PIR$ are correct. Then the scheme presented above is correct.
+\end{theorem}
+\begin{proof}
+First, note that by linear-homomorphic correctness of $\LHE$ it holds that
+\begin{align*}
+\tilde{\vc{W}} &= \LHE.\decshrink(\sk,\LHE.\evalshrink(\pk,f,\LHE.\enc(\pk,\vc{S}_1),\dots,\LHE.\enc(\pk,\vc{S}_\ell))\\
+&= f(\vc{S}_1,\dots,\vc{S}_\ell)\\
+&= \left( \sum_{i = 1}^k (-\vc{S}_i\vc{A} + \vc{C}_i)\cdot \vc{D}_i \right) + \vc{Z}
+\end{align*}
+Let $\tilde{\wn}_i$ be the $i$-th row of $\tilde{\vc{W}}$. It holds by definition $\vc{S}_i$, $\vc{C}_i$ and $\vc{Z}_i$ that
+\begin{align*}
+\tilde{\wn}_i &= (-\vc{s}_i\vc{A} + \vc{c}_i)\vc{D}_i + \vc{z}_i\\
+&= (-\vc{s}_i\vc{A} + \vc{s}_i\vc{A}_i +\vc{e}_i + \vc{b}_i)\vc{D}_i + \vc{m}_{0,i} + \yn_i\\
+&= \vc{b}_i \odot (\vc{m}_{1,i} - \vc{m}_{0,i}) + \vc{m}_{0,i} + \vc{e}_i \odot (\vc{m}_{1,i} - \vc{m}_{0,i}) + \yn_i.
+\end{align*}
+where $\yn_i=(y_{i,1},\dots, y_{i,m})$ is part of the output of $\CoPIR.\send$.
+
+
+Let $J_i$ be the support of $\vc{e}_i$ and let $\tilde y_i=(\tilde y_{i,1},\dots, \tilde y_{i,m})\leftarrow\CoPIR.\retrieve(\copir_{2,i},\st_i)$. By the correctness of the Co-PIR scheme $\CoPIR$ we have that $\tilde y_{i,j}=y_{i,j}$ for all $j\notin J_i$. On the other hand, by the correctness of the  PIR scheme $\PIR$ it holds that $$\tilde z_{i,j}=y_{i,j}+(m_{1,i,j}-m_{0,i,j})$$ for all $j\in J_i$. Consequently, we have that  $$z_{i,j}=\begin{cases}y_{i,j}  + (m_{1,i,j}-m_{0,i,j})& \text{ if } l = J_i[j] \\ y_{i,j} & \text{ otherwise} \end{cases}.$$ In other words, the term $(m_{1,i,j}-m_{0,i,j})$ only appears in the coordinates where $\en_i$ is equal to one. Then, it holds that $$\zn_i=\en_i\odot (\mn_{1,i}-\mn_{0,i}) + \yn_i.$$  
+
+We conclude that $$\wn=\tilde \wn_i-\zn_i= \vc{b}_i \odot (\vc{m}_{1,i} - \vc{m}_{0,i}) + \vc{m}_{0,i}.
+$$
+Since $\wn = (\wn_1 \| \dots \| \wn_\ell)$ it follows that
+\[
+\wn = \vc{b} \odot (\vc{m}_1 - \vc{m}_0) + \vc{m}_0,
+\]
+i.e. $\OT$ is correct.
+\end{proof}
+
+
+\paragraph{Communication complexity.}
+We will now analyze the communication complexity of $\OT$ and show which choice of parameters leads to an overall rate approaching 1.
+
+The bit-size of the message $\ot_1=\left(\pk,\vc{A},\{\ct_i, \vc{c}_i,\copir_{1,i}\}_{i\in [\ell]},\{\quer_{i,j}\}_{i \in [\ell], j \in [t]}\right)$ can be bounded as follows. 
+\begin{itemize}
+\item $|\pk| = \ell \cdot \poly[\secpar]$
+\item $|\vc{A}| = n \cdot m$
+\item $|\{\ct_i\}_{i \in [\ell]}| = \ell^2 \cdot n \cdot \poly[\secpar]$
+\item $|\{\vc{c}_i\}_{i\in [\ell]}| = \ell \cdot m$
+\item $|\{\copir_{1,i}\}_{i\in [\ell]}|=\ell \cdot t \cdot \mathsf{polylog}(m)\cdot \poly[\secpar]$
+\item $|\{\quer_{i,j}\}_{i \in [\ell], j \in [t]}| = \ell \cdot t \cdot\mathsf{polylog}(m)\cdot \poly[\secpar]$.
+\end{itemize}
+Consequently, the overall upload-rate $\rho_{\text{up}}$ can be bounded by
+\begin{align*}
+\rho_{\text{up}} &= \frac{|\pk| + |\vc{A}| + |(\ct_i)_{i \in [\ell]}| + |(\vc{c}_i)_{i\in [\ell]}|+|\{\copir_{1,i}\}_{i\in [\ell]}| + |(\quer_{i,j})_{i \in [\ell], j \in [t]}|}{\ell m}\\
+&\leq 1 + \frac{\poly[\secpar]}{m} + \frac{n}{\ell} + \frac{\ell \cdot n \cdot \poly[\secpar]}{m} + \frac{ t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]}{m}\\
+&\leq 1 + \frac{n}{\ell} + \frac{\ell \cdot n\cdot \poly[\secpar]}{m} + \frac{t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]}{m}.
+\end{align*}
+We get an overall upload rate of $\rho_{\text{up}} = 1 + O(1 / \secpar)$ by choosing $\ell = \secpar \cdot n$ and $m = n^2 \cdot \poly[\secpar]$ for a sufficiently large $\poly[\secpar]$ depending on $\epsilon$ (where $t = m^{1 - \epsilon}$).
+
+The bit-size of the message $\ot_2=\left(\tilde{\ct},\{\copir_{2,i}\}_{i\in[\ell]}, \{\resp_{i,j}\}_{i \in [\ell], j \in [t]} \right)$ can be bounded as follows.
+\begin{itemize}
+    \item $|\tilde{\ct}| = \ell m (1 + \rho_\LHE)$, where $1 + \rho_\LHE$ is the ciphertext rate of $\LHE$.
+    \item $|\{\copir_{2,i}\}_{i\in[ \ell]}|= \ell \cdot  t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]$
+    \item $|\{\resp_{i,j}\}_{i \in [\ell], j \in [t]}| = \ell \cdot    t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]$
+\end{itemize}
+Thus, the download-rate $\rho_{\text{down}}$ can be bounded by
+\[
+\rho_{\text{down}} = \frac{|\tilde{\ct}|+|\{\copir_{2,i}\}_{i\in[ \ell]}| + |\{\resp_{i,j}\}_{i \in [\ell], j \in [t]}| }{\ell m} \leq 1 + \rho_{\LHE} + \frac{\ell\cdot  t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]}{m}.
+\]
+By the above choice of $m$ this comes down to $\rho_{\text{down}} \leq 1 + \rho_{\LHE} + O(1/\secpar)$.
+
+\subsection{Security}
+
+\paragraph{Receiver Security}
+We now focus on the security of the scheme. We start by proving that the scheme is secure against semi-honest senders.
+
+\begin{theorem}
+\label{theor:ReceiverSecOT}
+Assume that $\mathsf{LHE}$ is a semantic secure LHE scheme, $\mathsf{PIR}$ is a user-private PIR scheme, $\CoPIR$ is a receiver secure Co-PIR scheme and that the $\mathsf{LPN}(n,m,\rho)$ assumption holds for $\rho=m^{1-\varepsilon}$ for $\varepsilon>0$. Then the scheme presented in Section \ref{subsec:OTprotocol} is receiver secure against semi-honest adversaries.
+\end{theorem}
+
+Recall that the receiver's message is composed of LHE ciphertexts, LPN samples, Co-PIR and PIR first messages. In a nutshell, receiver security follows from the fact that the ciphertexts hide the LPN secret, the LPN samples hide the receiver's input $\bn$ and finally the Co-PIR and PIR first messages hide the indices $J_i$.
+
+\begin{proof}
+We first present the simulator for the semi-honest sender. The simulator $\Sim$ receives the sender's input and sends it to the ideal functionality. Then it simulates the receiver as follows:
+
+\begin{description}
+\item[$\Sim(1^\lambda)$:]~
+\begin{itemize}
+    \item Choose $\An\sample \bin^{n\times m}$ and compute $(\pk,\sk)\gets \LHE.\keygen(1^\lambda,\ell)$.
+    \item For all $i\in[\ell]$, choose $\cn_i\sample \bin^m$ and compute $\ct_i\gets \LHE.\enc(\pk,\mathbf{0})$.
+    \item For all $i\in [\ell]$, let $J_i\subset [m]$ be a random subset of size $t$. Compute $\copir_{1,i}\leftarrow\CoPIR(J_i)$. Additionally, for $j\in [t]$ compute $(\quer_{i,j},\hat{\st}_{i,j}) = \PIR.\query(a_{i,j})$ where $a_{i,j}\sample [m]$.
+    \item Output $\ot_1=\left(\pk,\vc{A},\{\ct_i,\vc{c}_i,\copir\}_{i\in [\ell]},\{\quer_{i,j}\}_{i \in [\ell], j \in [t]}\right)$.
+\end{itemize}
+\end{description}
+
+We now show that the ideal world and real-world executions are indistinguishable. 
+The proof follows from the following sequence of hybrids.
+
+\begin{description}
+\item[Hybrid $\Hc_0$.] This hybrid is the real experiment.
+\end{description}
+
+
+For $i\in[\ell]$, consider the following sub-hybrids.
+
+\begin{description}
+\item[Hybrid $\Hc_{1,i}$.] Let $\Hc_{1,0}=\Hc_0$. This hybrid is identical to the previous one, except that the receiver computes $\ct_i\leftarrow\mathsf{LHE.Enc}(\pk,\mathbf{0})$. %This hybrid is defined for $i=1,\dots,\ell$.
+
+Indistinguishability of hybrids $\Hc_{1,i-1}$ and $\Hc_{1,i}$ are indistinguishable, for $i=1,\dots,\ell$ and where $\Hc_{1,0}=\Hc_0$. follows from the semantic security of $\LHE$.
+
+
+\item[Hybrid $\Hc_{2,i}$.] Let $\Hc_{2,0}=\Hc_{1,\ell}$. This hybrid is identical to the previous one, except that the receiver computes $(\copir_{1,i},\st_i) = \CoPIR.\query(J_i'[j])$ where $J_i'$ is a uniform subset of $[m]$ of size $t$.
+
+Indistinguishability of hybrids $\Hc_{2,i-1}$ and $\Hc_{2,i}$, for $i=1,\dots,\ell$ and where $\Hc_{2,0}=\Hc_{1,\ell}$, follows directly from the receiver security of the underlying $\CoPIR$.
+
+
+
+\end{description}
+
+Let $\phi:[\ell t] \to [\ell]\times [t]$ be a bijective function. For $i'\in[\ell t]$ consider the following hybrids.
+
+\begin{description}
+\item[Hybrid $\Hc_{3,i'}$.] Let $\Hc_{3,0}=\Hc_{2,\ell}$. Let $\phi(i')=(i,j)$. This hybrid is identical to the previous one, except that the receiver computes $(\quer_{i,j},\hat{\st}_{i,j}) = \PIR.\query(a_{i,j})$ where $a_{i,j}\sample [m]$.
+
+Indistinguishability of hybrids $\Hc_{3,i-1}$ and $\Hc_{3,i}$, for $i=1,\dots,\ell t$ and where $\Hc_{3,0}=\Hc_{2,\ell}$, follows directly from the receiver security of the underlying $\PIR$.
+\end{description}
+
+
+Finally for $i\in [\ell]$ consider the following sub-hybrids.
+\begin{description}
+\item[Hybrid $\Hc_{4,i}$.] Let $\Hc_{4,0}=\Hc_{3,\ell t}$. This hybrid is identical to the previous one, except that the receiver samples $\cn_i\sample \bin^m$. 
+
+Indistinguishability of hybrids $\Hc_{4,i-1}$ and $\Hc_{4,i}$, for $i=1,\dots,\ell$ and where $\Hc_{4,0}=\Hc_{3,\ell t}$, follows directly from the $\LPN$ assumption.
+\end{description}
+
+Finally, note that hybrid $\Hc_{4,\ell}$ is identical to the ideal-world execution. This concludes the proof of receiver security.
+\end{proof}
+
+\paragraph{Sender Security}
+
+\begin{theorem}
+\label{theor:SenderSecOT}
+Assume that $\mathsf{LHE}$ is a statistically function-private LHE scheme, $\mathsf{PIR}$ is a sender-private PIR scheme and $\CoPIR$ is a sender-private Co-PIR scheme. Then the scheme presented in Section \ref{subsec:OTprotocol} is sender secure.
+\end{theorem}
+
+
+
+\begin{proof}
+We begin by presenting the simulator $\Sim$ against a semi-honest receiver. Recall that, in the semi-honest case, the simulator has access to the receiver's internal state. The simulator sends $\bn=(b_1,\dots, b_{m\ell})$ to the ideal functionality and receives $\tilde\mn=(\tilde m_1,\dots,\tilde m_{m\ell})$. 
+
+\begin{description}
+\item[$\Sim(1^\lambda,\tilde \mn\in\bin^{m\ell},\vc{e}\in\bits^{m\ell}, \ot_1):$]~
+\begin{itemize}
+  \item Parse $\ot_1=\left(\pk,\vc{A},\{\ct_i,\vc{c}_i,\copir\}_{i\in [\ell]},\{\quer_{i,j}\}_{i \in [\ell], j \in [t]}\right)$.
+  \item It sets $m_{b_i,i}=\tilde m_i$ and $m_{1-b_i,i}=0$. Finally, it sets $\mn_0=(m_{0,1},\dots, m_{0,m\ell})$ and $\mn_1=(m_{1,1},\dots, m_{1,m\ell})$.
+  \item For $i\in[\ell]$, let $J_i=\supp(\vc{e}_i):=\{J_i[1],\dots,J_i[t]\}.$ Compute $(\copir_{2,i},\yn_i)\leftarrow\CoPIR(\copir_{1,i})$ where $\yn_i=(y_{i,1},\dots, y_{i,m})$.
+  \item For $i\in[\ell]$ and $j\in[t]$, choose $y'_{i,J_i[j]}\sample \bin$ restricted to $y_{i,J_i[j]}=y_{i,J_i[j]}'-(m_{1,i,J_i[j]}-m_{0,i,J_i[j]})$. Set $\overline{\DBn}_{i,j}=(0,\dots,y_{i,J_i[j]}',\dots, 0)$. Compute $\vc{r}_{i,j}\gets\PIR.\send(DB_{i,j},\quer_{i,j})$.
+ \item Compute $\tilde{\ct}\gets\LHE.\Sim(\pk,\wn^\ast)$ where $\wn^\ast:=(\wn_1^\ast,\dots,\wn_m^\ast)$ and $\wn^\ast_i=\bn_i\odot (\mn_{1,i}-\mn_{0,i})+\mn_{0,i}+\zn_i'$. Here, $\zn_i'=(z_{i,1},\dots,z_{i,m})$ such that \[
+ z'_{i,j'} = \begin{cases} y'_{i,j} & \text{ if } j' = J_i[j]\\ y_{i,j'} & \text{ otherwise}\end{cases}
+ \] 
+  \item Output $\ot_2=\left(\tilde{\ct},\{\copir_{2,i}\}_{i\in[\ell]}, \{\resp_{i,j}\}_{i \in [\ell], j \in [t]} \right)$.
+\end{itemize}
+\end{description}
+
+
+We will establish security via the following sequence of hybrids to show that the ideal-world experiment and the real-world one are indistinguishable. 
+
+
+
+
+
+\begin{description}
+\item[Hybrid $\Hc_0$.] This is the real experiment.
+\end{description}
+
+For $i'\in[\ell t]$ consider the following sub-hybrid. Let $\phi:[\ell t]\to[\ell]\times [t]$.
+
+\begin{description}
+\item[Hybrid $\Hc_{1,i'}$.] Let $\Hc_{1,0}=\Hc_0$. Let $\phi(i')=(i,j)$. This hybrid is identical to the previous one except that we set $\overline{\DBn}_{i,j}=(0,\dots, y_{i,J_i[j]}-(m_{1,i,J_i[j]}-m_{0,i,J_i[j]}),\dots ,0),$ i.e, $\overline{\DBn}_{i,j}$ is set to $0$ everywhere except for position $J_i[j]$ where it assumes the value  $y_{i,J_i[j]}-(m_{1,i,J_i[j]}-m_{0,i,J_i[j]})$ as in the previous hybrid. Additionally, we compute $\resp_{i,j}\gets\PIR.\send(\overline{\DBn}_{i,j},\quer_{i,j})$.
+
+Indistinguishability of hybrids $\Hc_{1,i'-1}$ and $\Hc_{1,i'}$ follows from the sender security of $\PIR$.
+\end{description}
+
+
+For $i\in[\ell]$ consider the following hybrid.
+
+\begin{description}
+\item[Hybrid $\Hc_{2,i}$.] Let $\Hc_{2,0}=\Hc_{1,\ell t}$. This hybrid is identical to the previous one except that for all $j\in[t]$, choose $y_{i,J_i[j]}'\leftarrow\bin$ such that $y_{i,J_i[j]}=y_{i,J_i[j]}'-(m_{1,i,J_i[j]}-m_{0,i,J_i[j]})$.
+
+Indistinguishability of hybrids $\Hc_{2,i-1}$ and $\Hc_{2,i}$ follows from the sender security of $\CoPIR$.
+
+Note that, in this hybrid $\overline{\DBn}_{i,j}$ is of the form $$\overline{\DBn}_{i,j}=(0,\dots, y'_{i,J_i[j]},\dots, 0).$$
+
+ Furthermore, note that we can write $\zn_{i}$ as $\zn_{i} = \vc{z}'_{i} - \en\odot (\mn_{1,i}-\mn_{0,i})$, where $\vc{z}'_{i}=(z_{i,1}',\dots,z_{i,m}')$ is defined by
+ \[
+ z'_{i,j'} = \begin{cases} y'_{i,j} & \text{ if } j' = J_i[j]\\ \tilde{y}_{i,j'} & \text{ otherwise}\end{cases}
+ \] where $\tilde{y}_{i,j}=y_{i,j}$ for $j\notin J_i$ by the correctness of $\CoPIR$.
+\end{description}
+
+Finally, consider the remaining sub-hybrids.
+
+\begin{description}
+\item[Hybrid $\Hc_3$.] In this hybrid we compute $\ct$ as follows: Set $\vc{W}^\ast \gets f(\vc{S}_1,\dots,\vc{S}_\ell)$ and compute $\ct \gets \LHE.\Sim(\pk,\vc{W}^\ast)$, where $\LHE.\Sim$ is the function-privacy simulator for $\LHE$. Statistical indistinguishability between $\Hc_{2,\ell}$ and $\Hc_3$ follows from the statistical function privacy of $\LHE$.
+
+\item[Hybrid $\Hc_4$.] In this hybrid, we compute $\Wn^\ast=(\wn^\ast_1,\dots, \wn^\ast_m)$ via $$\wn^\ast_i=\bn_i\odot (\mn_{1,i}-\mn_{0,i})+\mn_{0,i}+\zn_i'.$$
+\end{description}
+
+Finally, note that
+\begin{align*}
+\vc{W}^\ast &= f(\vc{S}_1,\dots,\vc{S}_\ell)\\
+&= \left( \sum_{i = 1}^k (-\vc{S}_i\vc{A} + \vc{C}_i)\cdot \vc{D}_i \right) + \vc{Z}.
+\end{align*}
+Let $\wn^\ast_i$ be the $i$-th row of $\vc{W}^\ast$. It holds by definition $\vc{S}_i$, $\vc{C}_i$ and $\vc{Z}_i$ that
+\begin{align*}
+\wn^\ast_i &= (-\vc{s}_i\vc{A} + \vc{c}_i)\vc{D}_i + \vc{z}_i\\
+&= (-\vc{s}_i\vc{A} + \vc{s}_i\vc{A}_i +\vc{e}_i + \vc{b}_i)\vc{D}_i + \vc{m}_{0,i} + \zn_i\\
+&= \vc{b}_i \odot (\vc{m}_{1,i} - \vc{m}_{0,i}) + \vc{m}_{0,i} + \vc{e}_i \odot (\vc{m}_{1,i} - \vc{m}_{0,i}) + \zn_i\\
+&= \vc{b}_i \odot (\vc{m}_{1,i} - \vc{m}_{0,i}) + \vc{m}_{0,i} + \vc{e}_i \odot (\vc{m}_{1,i} - \vc{m}_{0,i}) + (\zn_i'-\en_i\odot(\mn_{1,i}-\mn_{0,i}))\\
+&= \vc{b}_i \odot (\vc{m}_{1,i} - \vc{m}_{0,i}) + \vc{m}_{0,i} + \zn_i'\\
+\end{align*}
+
+Consequently, $\Hc_4$ is identical to the ideal experiment.
+\end{proof}
+
+
+\paragraph{Hardness assumptions for optimal-rate OT.} When we instantiate the LHE with one of the schemes from Section \ref{sec:ShrinkLHE}, the Co-PIR with the construction from Section \ref{sec:coOT} and the PIR with a known black-box construction based on LWE, DDH or QR \cite{C:DGIMMO19}, we obtain the following corollary
+
+\begin{corollary}
+Assuming the LWE, DDH or QR assumptions together with the $\mathsf{LPN}(n,m,\rho)$, there is a black-box construction for optimal-rate OT.
+\end{corollary}
+
+\section{Oblivious Matrix-Vector Product and Oblivious Linear Evaluation}
+\label{sec:OMVandOLE}
+
+In this section, we show how we can extend the techniques from the previous section to build protocols for OMV and OLE that achieve optimal rates.
+
+\subsection{OMV Protocol}
+\label{sec:rate1OMV}
+
+We start by presenting a secure protocol for oblivious matrix-vector products (OMV). In an OMV functionality, there is a sender, with input a matrix $\Mn\in\ZZ_q^{m\times m}$ and a vector $\vn\in\ZZ_q^m$, and a receiver with input $\bn\in\ZZ_q^m$. In the end, the receiver gets the value $\bn\Mn+\vn$ but learns nothing about $\Mn$ and $\vn$ whereas the sender learns nothing about $\bn$.
+
+We start by defining the functionality:
+\paragraph{OMV functionality.}  The functionality $\Fc_{\mathsf{OMV}}$ is parametrized by integers $m=\poly[\lambda]$ and $q$ and works as follows:
+\begin{itemize}
+    \item \textbf{Receiver phase.} $\Rs$ sends $\bn$ to  $\Fc_{\mathsf{OMV}}$ where $\bn\in\ZZ_q^m$.
+
+  \item \textbf{Sender phase.}
+      $\Ss$ sends $(\Mn,\vn)$ to $\Fc_{\mathsf{OMV}}$ where $\Mn\in\ZZ_q^{m\times m}$ and $\vn\in\bin^m$. $\Fc_{\mathsf{OMV}}$ sends $\bn\Mn + \vn\in\ZZ_q^m$ to $\Rs$. 
+\end{itemize}
+
+
+Below, we present a protocol for OMV that supports a sublinear number of multiplications in the size of the matrix. That is, all columns and rows of the matrix $M$ should have bounded (sublinear in $m$) hamming weight.\footnote{Recall that hamming weight is used to count non-zero elements.}
+
+\subsubsection{The Protocol}
+
+We start by presenting the ingredients that we need for our OMV protocol.
+
+\paragraph{Ingredients.} Let $q=\poly[\lambda]$. We will need the following ingredients.
+\begin{itemize}
+    \item A packed linearly homomorphic encryption scheme $\LHE = (\keygen,\enc,\eval,\shrink,\decshrink)$ with plaintext space $\ZZ_q^\ell$ and a post-homomorphism shrinking procedure $\shrink$ which converts ciphertexts into a rate 1 representation.%\footnote{Recall that we use the notation $\evalshrink$ to denote the composition of algorithms $\eval$ and $\shrink$.}
+    \item The binary $\LPN(n,m,\rho,q)$ problem with dimension $n = \poly$, $m = n \cdot \ell \cdot \poly$ samples and slightly sub-constant noise-rate $\rho = m^{1 - \epsilon}$.
+    \item A 2-round PIR scheme $\PIR = (\query,\send,\retrieve)$ with poly-logarithmic communication complexity and sender privacy.
+    \item A 2-round Co-PIR scheme $\CoPIR=(\query,\send,\retrieve)$ over $\ZZ_q$ parametrized by $m(q-1)$.
+\end{itemize}
+
+
+We define the hamming weight of a matrix $\Dn\in\ZZ_q^{m\times m}$ to be the value $\mathsf{hw}(\Dn)=\max_i\{\mathsf{hw}(\dn_i)\},\mathsf{hw}(\dn^{(i)})\}$ for all $i\in[m]$, where $\dn_i$ and $\dn^{(i)}$ are the $i$-th row and column of $\Dn$ respectively. 
+In addition to the notation presented in Section \ref{sec:rate1OTwithCoPIR}, we present the following algorithm:
+\begin{description}
+\item[$\AffineDecomp(\Dn\in \ZZ_q^{m \times m}):$] Takes a matrix $\Dn$ such that $\mathsf{hw}(\Dn)\leq \mu$ for all $i\in[m]$. It outputs $\Tn_1,\dots ,\Tn_\mu\in\ZZ_q^{m\times m}$ such that $\mathsf{hw}(\Tn_i)\leq 1$ for all $i\in[\mu]$ and $\Dn=\Tn_1 + \dots + \Tn_\mu$.
+\end{description}
+
+
+\paragraph{Protocol.} The protocol $\OMV=(\OMVR,\OMVS,\OMVD)$ is presented below. 
+
+\begin{description}
+\item[$\OMVR(\vc{b} \in \ZZ_q^{m \ell}):$]~
+\begin{itemize}
+    \item Parse $\vc{b} = (\vc{b}_1,\dots,\vc{b}_\ell)$, where the $\vc{b}_i \in \ZZ_q^m$ are blocks of size $m$.
+    \item Choose $\vc{A}\sample \ZZ_q^{n\times m}$ uniformly at random and compute a pair of public and secret key $(\pk,\sk)\gets\LHE.\keygen(1^\secpar,\ell)$.
+    \item For all $i\in[\ell]$, choose $\vc{s}_i \sample \ZZ_q^n$, and $\en_i \sample \errordist_{m,t,q}$, compute $\vc{c}_i \gets \vc{s}_i\vc{A}+\vc{e}_i+\bn_i$, and set $\vc{S}_i \gets \SingleRowMatrix(\ell,n,i,\vc{s}_i)$. Compute a matrix-ciphertext $\ct_i \gets \LHE.\enc(\pk,\vc{S}_i)$.
+    \item For all $i\in[\ell]$ set $J_i = \supp(\vc{e}_i)$ to be the support of $\vc{e}_i$.  
+    \item For all $i\in[\ell]$ and $k\in[\mu]$ compute $(\copir_{1,i,k},\st_{i,k})\gets \CoPIR.\query(J_i)$. Additionally, for all $j \in [t]$ compute $(\quer_{i,k,j},\hat{\st}_{i,k,j}) = \PIR.\query((q-1)(J_i[j]-1)+e_{i,J_i[j]})$.
+     \item Output $\omv_1=\left(\pk,\vc{A},\{\ct_i, \vc{c}_i\}_{i\in [\ell]},\{\copir_{1,i,k}\}_{i\in [\ell],k\in[\mu]},\{\quer_{i,k,j}\}_{i \in [\ell],k\in[\mu], j \in [t]}\right)$ and $$\st = \left(\sk,\{J_i\}_{i \in [\ell]},\{\st_{i,k}\}_{i \in [\ell],k\in[\mu]},\{\hat{\st}_{i,k,j}\}_{i \in [\ell],k\in[\mu], j \in [t]}\right).$$
+\end{itemize}
+
+\item[$\OMVS((\Dn,\vn) \in \ZZ_q^{m\times m \ell}\times \ZZ_q^{m\ell},\omv_1):$]~
+\begin{itemize}
+    \item Parse $\Dn=(\Dn_1,\dots ,\Dn_\ell)$ and $\vc{v} = (\vc{v}_{1},\dots,\vc{v}_{\ell})$. If $\mathsf{hw}(\Dn)>\mu$ abort the protocol. %, where each $\vc{u}_{b,i} =(u_{b,i,1},\dots, u_{b,i,m})\in \bin^m$. 
+    Parse $\omv_1=\left(\pk,\vc{A},\{\ct_i, \vc{c}_i\}_{i\in [\ell]},\{\copir_{1,i,k}\}_{i\in [\ell],k\in[\mu]},\{\quer_{i,k,j}\}_{i \in [\ell],k\in[\mu], j \in [t]}\right)$.
+    \item For $i \in [\ell]$ and $k\in[\mu]$ $(\yn_{i,k},\copir_{2,i,k})\gets \CoPIR.\send(\copir_{1,i,k})$ where $\yn_{i,k}=(y_{i,k,1},\dots, y_{i,k,m})$. 
+    \item For all $i\in[\ell]$ set $\vc{z}_i = \vc{v}_i +\sum_{k=1}^\mu \yn_{i,k}$.
+    \item Set $\vc{Z} = \RowMatrix(\ell,m,\vc{z}_1,\dots,\vc{z}_\ell)$.
+    \item For all $i \in [\ell]$ set $\vc{C}_i = \SingleRowMatrix(\ell,m,i,\vc{c}_i)$.% and $\vc{D}_i = \Diag(m,\vc{u}_{0,i})$.
+    \item Define the $\ZZ_q$-linear function $f: (\ZZ_q^{\ell \times n})^\ell \to \ZZ_q^{\ell \times m}$ via
+    \[
+    f(\vc{X}_1,\dots,\vc{X}_\ell)=\left( \sum_{i = 1}^\ell (-\vc{X}_i\vc{A} + \vc{C}_i)\cdot \vc{D}_i \right) + \vc{Z}.
+    \]
+    \item Compute $\tilde \ct \gets \LHE.\evalshrink(\pk,f,\ct_1,\dots,\ct_\ell)$.
+    \item For all $\in[\ell]$, set $(\Tn_{i,1},\dots, \Tn_{i,\mu})\leftarrow\AffineDecomp(\Dn_i)$. 
+    Moreover, for all $k\in[\mu]$ and all $l\in[m]$, let $t_{i,k,l}$ be the only non-zero element in the $l$-th row of $\Tn_{i,k}$. If its $l$-th row is a zero vector, set $t_{i,k,l}=0$.
+    \item For all $i \in [\ell]$ and $k\in[\mu]$ set $${DB}_{i,k}=(y_{i,k,1}+t_{i,k,1},y_{i,k,1}+2\cdot t_{i,k,1},\dots,y_{i,k,1}+(q-1)\cdot t_{i,k,1},\dots,
+    y_{i,k,m}+(q-1)\cdot t_{i,k,m}),$$
+    where $DB_{i,k}$ is a $(q-1)m$-sized vector.
+    For all $j \in [t]$  compute $\resp_{i,k,j} \gets \PIR.\send(DB_{i,k},\quer_{i,k,j})$.
+    \item Output $\omv_2=\left(\tilde{\ct},\{\copir_{2,i,k}\}_{i\in[\ell],k\in[\mu]}, \{\resp_{i,k,j}\}_{i \in [\ell],k\in[\mu] ,j \in [t]} \right)$.
+\end{itemize}
+
+\item[$\OMVD(\omv_2,\st)$:]~
+\begin{itemize}
+    \item Parse $\omv_2=\left(\tilde{\ct},\{\copir_{2,i,k}\}_{i\in[\ell],k\in[\mu]}, \{\resp_{i,k,j}\}_{i \in [\ell],k\in[\mu] ,j \in [t]} \right)$ and  $$\st = \left(\sk,\{J_i\}_{i \in [\ell]},\{\st_{i,k}\}_{i \in [\ell],k\in[\mu]},\{\hat{\st}_{i,k,j}\}_{i \in [\ell],k\in[\mu], j \in [t]}\right).$$
+    \item For all $i\in[\ell]$ and $k\in[\mu]$ compute $\tilde \yn_{i,k}=(\tilde y_{i,k,1},\dots, \tilde y_{i,k,m})\leftarrow\CoPIR.\retrieve(\copir_{2,i,k},\st_{i,k})$.
+    \item For $i \in [\ell]$, $k\in[\mu]$ and $j \in [t]$ compute $\tilde{z}_{i,k,j} \gets \PIR.\retrieve(\resp_{i,k,j},\hat{\st}_{i,k,j})$.
+    \item For all $i\in[\ell]$ and $k\in[\mu]$ set $\zn_{i,k}=(z_{i,k,1},\dots, z_{i,k,m})$ where  
+    \[
+    z_{i,k,l} = \begin{cases}\tilde{z}_{i,k,j} & \text{ if } l = J_i[j] \\ \tilde y_{i,k,l} & \text{ otherwise} \end{cases}.
+    \]
+    \item For all $i\in[\ell]$ set $\zn_i=\sum_{k=1}^\mu \zn_{i,k}$.
+    \item Set $\vc{Z} = \RowMatrix(\ell,m,\vc{z}_1,\dots,\vc{z}_\ell)$.
+    \item Compute $\tilde{\vc{W}} \gets \LHE.\decshrink(\sk,\tilde{\ct})$ and $\vc{W} = \tilde{\vc{W}} - \vc{Z}$.
+    \item Let $\vc{w}_1,\dots,\vc{w}_\ell$ be the rows of $\vc{W}$. Output $\vc{w} = (\vc{w}_1 \| \dots \| \vc{w}_\ell) \in \ZZ_q^{m \ell}$.
+\end{itemize}
+\end{description}
+
+
+\paragraph{Correctness.} We first show that the scheme presented above is correct.
+
+\begin{theorem}[Correctness]
+Assume that $\LHE$, $\CoPIR$ and $\PIR$ are correct. Then the scheme presented above is correct.
+\end{theorem}
+The proof follows the same reasoning as the proof of Theorem \ref{theor:correctOT}.
+
+\paragraph{Communication complexity.}
+We now analyze the communication complexity of $\OMV$ and show which choice of parameters leads to an overall rate approaching 1.
+
+The bit-size of the message $\omv_1=\left(\pk,\vc{A},\{\ct_i, \vc{c}_i\}_{i\in [\ell]},\{\copir_{1,i,k}\}_{i\in [\ell],k\in[\mu]},\{\quer_{i,k,j}\}_{i \in [\ell],k\in[\mu], j \in [t]}\right)$ can be bounded as follows:
+\begin{itemize}
+\item $q=\poly[\lambda]$
+\item $|\pk| = \ell \cdot \poly[\secpar]$
+\item $|\vc{A}| = n \cdot m\cdot \log q$
+\item $|\{\ct_i\}_{i \in [\ell]}| = \ell^2 \cdot n \cdot \poly[\secpar]$
+\item $|\{\vc{c}_i\}_{i\in [\ell]}| = \ell \cdot m\cdot \log q$
+\item $|\{\copir_{1,i,k}\}_{i\in [\ell]}|=\mu \cdot \ell \cdot t \cdot \mathsf{polylog}(m,q)\cdot \poly[\secpar]$
+\item $|\{\quer_{i,k,j}\}_{i \in [\ell], j \in [t]}| = q\cdot \mu\cdot\ell \cdot t \cdot\mathsf{polylog}(m)\cdot \poly[\secpar]$.
+\end{itemize}
+Thus, the overall upload-rate $\rho_{\text{up}}$ can be bounded by
+\begin{align*}
+\rho_{\text{up}} &\leq 1 + \frac{n\log q}{\ell} + \frac{\ell \cdot n\cdot \poly[\secpar]}{m} + \frac{\mu\cdot t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]}{m}.
+\end{align*}
+We get an overall upload rate of $\rho_{\text{up}} = 1 + O(1 / \secpar)$ by choosing $\ell = \secpar \cdot n \log q$, $\mu=m^{1-\zeta}$ (for some $\zeta>0$ such that $\zeta + \epsilon>1$) and $m = n^2\cdot\log q \cdot \poly[\secpar]$ for a sufficiently large $\poly[\secpar]$ depending on $\epsilon$ (where $t = m^{1 - \epsilon}$).
+
+
+The bit-size of the message $\omv_2=\left(\tilde{\ct},\{\copir_{2,i,k}\}_{i\in[\ell],k\in[\mu]}, \{\resp_{i,k,j}\}_{i \in [\ell],k\in[\mu] ,j \in [t]} \right)$ can be bounded as follows:
+\begin{itemize}
+\item $q=\poly[\lambda]$
+    \item $|\tilde{\ct}| = \ell m (1 + \rho_\LHE)$, where $1 + \rho_\LHE$ is the ciphertext rate of $\LHE$
+    \item $|\{\copir_{2,i,k}\}_{i\in[ \ell]}|=\mu \cdot \ell \cdot  t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]$
+    \item $|\{\resp_{i,k,j}\}_{i \in [\ell], j \in [t]}| =q\cdot \mu \cdot \ell \cdot    t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]$.
+\end{itemize}
+Thus, the download-rate $\rho_{\text{down}}$ can be bounded by
+\[
+\rho_{\text{down}}  \leq 1 + \rho_{\LHE} + \frac{\mu\cdot \ell\cdot  t\cdot\mathsf{polylog}(m) \cdot \poly[\secpar]}{m}.
+\]
+By the above choice of $m$ and $\mu$ this comes down to $\rho_{\text{down}} \leq 1 + \rho_{\LHE} + O(1/\secpar)$.
+
+
+\paragraph{Security.} Finally, we state the result that guarantees security of the scheme. 
+\begin{theorem}[Security]
+The scheme presented above is:
+\begin{itemize}
+    \item Receiver secure if $\mathsf{LHE}$ is a semantic secure LHE scheme, $\mathsf{PIR}$ is a user-private PIR scheme, $\CoPIR$ is a receiver secure Co-PIR scheme and that the $\mathsf{LPN}(n,m,\rho,q)$ assumption holds for $\rho=m^{1-\varepsilon}$ for $\varepsilon>0$.
+    \item Sender secure if $\mathsf{LHE}$ is a statistically function-private LHE scheme, $\mathsf{PIR}$ is a sender-private PIR scheme and $\CoPIR$ is a sender-private Co-PIR scheme.
+\end{itemize}
+\end{theorem}
+
+The proof of the theorem follows the same reasoning as the proof of Theorem \ref{theor:ReceiverSecOT} and Theorem \ref{theor:SenderSecOT}.
+
+Again, instantiating the ingredients used in $\OMV$ with the constructions from this chapter, we obtain the following corollary.
+\begin{corollary}
+There exists a black-box construction for $\OMV$ over $\ZZ_q$ assuming: 
+\begin{itemize}
+    \item LWE and $\mathsf{LPN}(n,m,\rho,q)$ for $q=\poly[\lambda]$
+    \item DDH and $\mathsf{LPN}(n,m,\rho,q)$ for $q=2^\mu=\poly[\lambda]$.% and $q$.
+\end{itemize}
+\end{corollary}
+
+
+\subsection{OLE Protocol}
+\label{sec:OLErate1fromOMV}
+An oblivious linear evaluation (OLE) is a protocol between a sender, with input an affine function $f$, and a receiver, with input a point $b$. It allows for the receiver to obliviously learn $f(b)$. We now show how we can obtain an OLE using the OMV protocol presented in Section \ref{sec:rate1OMV}.
+
+We start by defining the functionality:
+\paragraph{OLE functionality.}  The functionality $\Fc_{\mathsf{OLE}}$ is parametrized by integers $k=\poly[\lambda]$ and $q$ and works as follows:
+\begin{itemize}
+    \item \textbf{Receiver phase.} $\Rs$ sends $\bn$ to  $\Fc_{\mathsf{OLE}}$ where $\bn\in\ZZ_q^k$. 
+
+  \item \textbf{Sender phase.}
+      $\Ss$ sends $(\un_0,\un_1)$ to $\Fc_{\mathsf{OLE}}$ where $\un_0,\un_1\in\ZZ_q^{k}$. $\Fc_{\mathsf{OLE}}$ sends $\bn\odot\un_0 + \un_1\in\ZZ_q^k$ to $\Rs$. 
+\end{itemize}
+
+
+\subsubsection{Protocol for Small Fields}
+We briefly sketch how we can construct an OLE scheme over $\ZZ_q$ where $q=\poly[\lambda]$. The protocol follows as a particular case of the protocol of Section \ref{sec:rate1OMV}. We give a brief overview of the scheme below.
+
+Let Using the notation of Section \ref{sec:rate1OMV}, let $\bn=(\bn_1,\dots, \bn_\ell)\in\ZZ_q^{m\ell}$ be the receiver's input and let $(\un_0=(\un_{0,1},\dots, \un_{0,\ell}),\un_1=(\un_{1,1},\dots, \un_{1,\ell})) \in(\ZZ_q^{m\ell})^2$ be the sender's input. To achieve OLE, the sender constructs the matrices $\Dn_i=\mathsf{Diag}(m,\un_{0,i})$ and sets $\vn_i=\un_{1,i}$ for all $i\in [\ell]$. Then they run the OMV protocol where the receiver inputs $\bn$ and the sender inputs $\Dn=(\Dn_1,\dots ,\Dn_\ell)$ and $\vn=(\vn_1,\dots, \vn_\ell)$. It is easy to see that the output of the receiver is $\yn=(\yn_1,\dots, \yn_\ell)$ where $$\yn_i=\bn_i\Dn_i+\vn_i= \bn_i\odot \un_{0,i}+\un_{1,i}$$ be the correctness of the OMV protocol. 
+
+Moreover, $\mathsf{hw}(\Dn_i)=1\leq m^{1-\zeta}$ for some $\zeta>0$ such that $\zeta + \epsilon>1$. Thus the  resulting protocol achieves overall rate 1. Finally, in terms of hardness assumptions, the OLE protocol inherits the same security.
+
+
+\subsubsection{Extending OLE to Larger Rings}
+
+Following \cite{C:DGIMMO19},  we briefly explain how we can achieve OLE over larger rings (which can potentially have a super-polynomial size in $\lambda$).
+
+\paragraph{OLE over $\ZZ_N=\ZZ_{q_1}\times \dots \times \ZZ_{q_\delta}$.} Let $N=\prod_{i=1}^\delta q_i$ be an integer (which might be superpolynomial in $\lambda$) such that for all $i\in [\delta]$ $q_i=\poly[\lambda]$ are different prime numbers. Then, via the Chinese Remainder Theorem, $\ZZ_N$ is isomorphic to $\ZZ_{q_1}\times \dots \times \ZZ_{q_\delta}$. Thus, performing an OLE over $\ZZ_N$ boils down to performing $\delta$ OLEs over each one of the smaller fields $\ZZ_{q_i}$. It is easy to see that, if each OLE over $\ZZ_{q_i}$ has an overall rate-1, then the resulting OLE over $\ZZ_N$ also achieves an overall rate-1.
+
+\paragraph{OLE over extension fields.} We now show how these techniques can be adapted to perform OLE over an extension field $\FF_{q^k}$ of order $q^k$ for a prime $q$. Here, we rely on the fact that multiplication over $\FF_{q^k}$ can be expressed as a linear function over the field $\ZZ_q$. That is, suppose that an element $\xn\in\FF_{q^k}$ is of the form $\xn=x_1+x_2\alpha+\dots + x_{k}\alpha^{k-1}$ where each $x_i\in\ZZ_q$  and  $\alpha$ is a symbol. Then, for elements $\an,\xn\in\FF_{q^k}$ the product $$\xn\an=f_{1,\an}(\xn)+f_{2,\an}(\xn)\alpha+\dots + f_{k,\an}(\xn)\alpha^{k-1}$$ where each $f_{i,\an}$ is a $\ZZ_q$-linear function which depends solely on $\an$.
+
+Given this, we briefly describe how we can perform several OLEs over $\FF_{q^k}$ while preserving overall rate 1. The receiver has input $\bn=(\bn_1,\dots, \bn_t)\in\FF_{q^k}^t$ such that $kt=m\ell$ and $k|m$ (using the same notation as in Section \ref{sec:rate1OMV}). It parses each $\bn_i$ as a $k$-dimensional vectors $\bar \bn_i\in\ZZ_q^k$. Then, it organizes all $t$ vectors $\bn_i$ in blocks $\cn_i\in\ZZ_q^m$ of size $m$. It inputs $\cn=(\cn_1,\dots, \cn_\ell)$ into the OMV protocol.
+
+
+The sender, with input $\un,\vn\in\FF_{q^k}$ rearranges $\un,\vn$ in the same way as the receiver and obtains $\wn=(\wn_1,\dots, \wn_\ell),\zn=(\zn_1,\dots, \zn_\ell)$ respectively. Then, for each $\wn_i=(\wn_{i,1},\dots, \wn_{i,m/k})$, it computes the functions $f_{j,\wn_{i,r}}$ for each $j\in[k]$, $i\in[\ell]$ and $r\in[m/k]$. Let $\fn_{j,\wn_{i,r}}$ be the vector composed by the coefficients of $f_{j,\wn_{i,r}}$. The sender computes the matrices $$\bar \Dn_{i,r}=\begin{pmatrix} | & &| \\ \fn_{1,\wn_{i,r}} & \dots & \fn_{k,\wn_{i,r}} \\| & & |\end{pmatrix}$$ and then sets $$\Dn_i=\begin{pmatrix} \bar \Dn_{i,1} &  & \\  & \ddots &  \\ & & \bar \Dn_{i,m/k}\end{pmatrix}.$$ It inputs $\Dn=(\Dn_1,\dots, \Dn_\ell)$ and $\zn$ into the OMV protocol. 
+
+It is easy to see that the receiver's output will be $\bn\odot \un + \vn$ where $\odot$ denotes component-wise multiplication over $\FF_{q^k}$. Moreover, $\mathsf{hw}(\Dn_i)= k$. By choosing $k$ such that $k \leq  \mu=m^{1-\zeta}$ we achieve a protocol with overall rate 1. In particular, we can set the parameters such that $k=\lambda$ and we achieve an OLE over the field  $\FF_{q^\lambda}$ of exponential size.
+

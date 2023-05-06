@@ -1,0 +1,350 @@
+% !TEX root = dissertation.tex
+% Macros for General Use
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem*{remark}{Remark}
+\newtheorem{fact}{Fact}[section]
+\newtheorem{claim}{Claim}[section]
+\newtheorem{construction}{Construction}[section]
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+
+ \createpseudocodeblock{psb}{center,boxed}{}{}{}
+\createprocedureblock{pcb}{center,boxed}{}{}{}
+
+\makeatletter
+\DeclareRobustCommand{\circbullet}{\mathbin{\vphantom{\circ}\text{\circbullet@}}}
+\newcommand{\circbullet@}{%
+  \check@mathfonts
+  \m@th\ooalign{%
+    \clipbox{0 0 0 {\dimexpr\height-\fontdimen22\textfont2}}{$\bullet$}\cr
+    $\circ$\cr
+  }%
+}
+\DeclareRobustCommand{\bulletcirc}{\mathbin{\text{\bulletcirc@}}}
+\newcommand{\bulletcirc@}{%
+  \check@mathfonts
+  \m@th\ooalign{%
+    \raisebox{\fontdimen22\textfont2}{\clipbox{0 {\fontdimen22\textfont2} 0 0}{$\bullet$}}\cr
+    $\circ$\cr
+  }%
+}
+\makeatother
+
+\makeatletter
+\def\thickhline{%
+  \noalign{\ifnum0=`}\fi\hrule \@height \thickarrayrulewidth \futurelet
+   \reserved@a\@xthickhline}
+\def\@xthickhline{\ifx\reserved@a\thickhline
+               \vskip\doublerulesep
+               \vskip-\thickarrayrulewidth
+             \fi
+      \ifnum0=`{\fi}}
+\makeatother
+\newlength{\thickarrayrulewidth}
+\setlength{\thickarrayrulewidth}{1.5\arrayrulewidth}
+
+
+
+\newcommand{\HH}{\mathbb{H}}
+\newcommand{\LL}{\mathbb{L}}
+\newcommand{\JJ}{\mathbb{J}}
+\newcommand{\TT}{\mathbb{T}}
+\newcommand{\XX}{\mathbb{X}}
+\newcommand{\NR}{\mathbb{NR}}
+
+\newcommand{\Gc}{\mathcal{G}}
+\newcommand{\Uc}{\mathcal{U}}
+\newcommand{\Zc}{\mathcal{Z}}
+\newcommand{\Wc}{\mathcal{W}}
+\newcommand{\Qc}{\mathcal{Q}}
+\newcommand{\Rc}{\mathcal{R}}
+\newcommand{\Cc}{\mathcal{C}}
+\newcommand{\Sc}{\mathcal{S}}
+\newcommand{\Tc}{\mathcal{T}}
+\newcommand{\Ac}{\mathcal{A}}
+\newcommand{\Lc}{\mathcal{L}}
+\newcommand{\Bc}{\mathcal{B}}
+\newcommand{\Dc}{\mathcal{D}}
+\newcommand{\Ec}{\mathcal{E}}
+\newcommand{\Hc}{\mathcal{H}}
+\newcommand{\Oc}{\mathcal{O}}
+\newcommand{\Kc}{\mathcal{K}}
+\newcommand{\Vc}{\mathcal{V}}
+\newcommand{\Xc}{\mathcal{X}}
+\newcommand{\Yc}{\mathcal{Y}}
+\newcommand{\Ic}{\mathcal{I}}
+\newcommand{\Fc}{\mathcal{F}}
+\newcommand{\EG}{\mathcal{EG}}
+\newcommand{\Mc}{\mathcal{M}}
+
+
+\newcommand{\hn}{\mathbf{h}}
+\newcommand{\tn}{\mathbf{t}}
+\newcommand{\kn}{\mathbf{k}}
+\newcommand{\sn}{\mathbf{s}}
+\newcommand{\pn}{\mathbf{p}}
+\newcommand{\rn}{\mathbf{r}}
+\newcommand{\en}{\mathbf{e}}
+\newcommand{\zn}{\mathbf{z}}
+\newcommand{\yn}{\mathbf{y}}
+\newcommand{\mn}{\mathbf{m}}
+\newcommand{\wn}{\mathbf{w}}
+\newcommand{\vn}{\mathbf{v}}
+\newcommand{\fn}{\mathbf{f}}
+\newcommand{\gn}{\mathbf{g}}
+\newcommand{\un}{\mathbf{u}}
+\newcommand{\an}{\mathbf{a}}
+\newcommand{\xn}{\mathbf{x}}
+\newcommand{\bn}{\mathbf{b}}
+\newcommand{\cn}{\mathbf{c}}
+\newcommand{\dn}{\mathbf{d}}
+\newcommand{\Hn}{\mathbf{H}}
+\newcommand{\Mn}{\mathbf{M}}
+\newcommand{\Nn}{\mathbf{N}}
+\newcommand{\Yn}{\mathbf{Y}}
+\newcommand{\En}{\mathbf{E}}
+\newcommand{\Zn}{\mathbf{L}}
+\newcommand{\Ln}{\mathbf{Z}}
+\newcommand{\Sn}{\mathbf{S}}
+\newcommand{\Vn}{\mathbf{V}}
+\newcommand{\Xn}{\mathbf{X}}
+\newcommand{\In}{\mathbf{I}}
+\newcommand{\An}{\mathbf{A}}
+\newcommand{\Bn}{\mathbf{B}}
+\newcommand{\Cn}{\mathbf{C}}
+\newcommand{\Dn}{\mathbf{D}}
+\newcommand{\Gn}{\mathbf{G}}
+\newcommand{\Qn}{\mathbf{Q}}
+\newcommand{\Pn}{\mathbf{P}}
+\newcommand{\Un}{\mathbf{U}}
+\newcommand{\Rn}{\mathbf{R}}
+\newcommand{\Tn}{\mathbf{T}}
+\newcommand{\Wn}{\mathbf{W}}
+\newcommand{\one}{\mathbf{1}}
+
+\newcommand{\Ds}{\mathsf{D}}
+\newcommand{\Ss}{\mathsf{S}}
+\newcommand{\As}{\mathsf{A}}
+\newcommand{\Rs}{\mathsf{R}}
+\newcommand{\Gs}{\mathsf{G}}
+\newcommand{\Cs}{\mathsf{C}}
+\newcommand{\Ps}{\mathsf{P}}
+\newcommand{\Vs}{\mathsf{V}}
+\newcommand{\Bs}{\mathsf{B}}
+\newcommand{\Fs}{\mathsf{F}}
+\newcommand{\Ts}{\mathsf{T}}
+\newcommand{\sh}{\mathsf{s}}
+\newcommand{\rh}{\mathsf{r}}
+\newcommand{\fs}{\mathsf{f}}
+
+\newcommand{\smod}{\!\!\!\!\mod}
+\newcommand{\bits}{\{0,1\}} % use \bin instead
+\newcommand{\crs}{\mathsf{crs}}
+\newcommand{\eqornot}{\ensuremath{\stackrel{?}{=}}}
+\newcommand{\comp}{\ensuremath{\stackrel{c}{\equiv}}}
+\newcommand{\stat}{\ensuremath{\stackrel{s}{\equiv}}}
+\newcommand{\sd}{\ensuremath{\mathsf{SD}}}
+
+\newcommand{\mc}[1]{\mathcal{#1}}
+\newcommand{\msf}[1]{\mathsf{#1}}
+\newcommand{\wt}[1]{\widetilde{#1}}
+\newcommand{\vc}[1]{\mathbf{#1}}
+\newcommand{\bo}[1]{\boldsymbol{#1}}
+\newcommand{\al}[1]{\mathsf{#1}}
+
+\newcommand{\id}{\ensuremath{\mathsf{id}}}
+\newcommand{\ID}{\mathsf{ID}}
+\newcommand{\hint}{\ensuremath{\mathsf{hint}}}
+\newcommand{\lis}{\ensuremath{\mathsf{list}}}
+\newcommand{\msg}{\ensuremath{\mathsf{msg}}}
+% \newcommand{\support}{\ensuremath{\mathsf{SUPP}}}
+\newcommand{\ct}{\ensuremath{\mathsf{ct}}}
+\newcommand{\sid}{\mathsf{sid}}
+\newcommand{\rank}{\mathrm{rank}}
+\newcommand{\oracle}{\ensuremath{\mathcal{O}}}
+
+\newcommand{\Sim}{\mathsf{Sim}}
+\newcommand{\EXEC}{\mathsf{EXEC}}
+\newcommand{\REAL}{\mathsf{REAL}}
+\newcommand{\IDEAL}{\mathsf{IDEAL}}
+\newcommand{\PRF}{\mathsf{PRF}}
+\newcommand{\MPCT}{\mathsf{MPCT}}
+\newcommand{\PKE}{\ensuremath{\mathsf{PKE}}}
+\mathchardef\mhyphen="2D
+
+\newcommand{\Hyb}{\ensuremath{\mathsf{\mathbf{Hyb}}}}
+\newcommand{\hyb}{\mathbf{Hybrid}}
+
+\newcommand{\ePSI}{$\ell$PSI}
+\newcommand{\HE}{\ensuremath{\mathsf{HE}}}
+\newcommand{\Hash}{\mathsf{Hash}}
+\newcommand{\HGen}{\mathsf{HGen}}
+\newcommand{\HEnc}{\mathsf{HEnc}}
+\newcommand{\HDec}{\mathsf{HDec}}
+\newcommand{\hr}{\ensuremath{\mathsf{hr_{root}}}}
+\newcommand{\lb}{\mathsf{lb}}
+\newcommand{\cth}{\ensuremath{\mathsf{cth}}}
+\newcommand{\pth}{\mathsf{pth}}
+\newcommand{\GS}{\ensuremath{\mathsf{GS}}}
+\newcommand{\Eval}{\mathsf{Eval}}
+\newcommand{\Garb}{\mathsf{Garb}}
+\def \psi{\mathsf{psi}}
+\newcommand{\DecPath}{\mathsf{DecPath}}
+\newcommand{\keygen}{\mathsf{KeyGen}}
+\newcommand{\td}{\mathsf{td}}
+\newcommand{\gencrs}{\mathsf{GenCRS}}
+\newcommand{\com}{\mathsf{com}}
+\newcommand{\Verify}{\mathsf{Verify}}
+
+\newcommand{\Glo}{\mathsf{Prm}}
+\newcommand{\Gen}{\mathsf{Gen}}
+\newcommand{\SDE}{{\mathsf{SDE}}}
+\newcommand{\DB}{{\mathsf{DB}}}
+\newcommand{\hsh}{{\mathsf{h}}}
+\newcommand{\Det}{{\mathsf{Detect}}}
+\newcommand{\Dec}{\mathsf{Dec}}
+
+\newcommand{\pPRF}{\mathsf{pPRF}}
+\newcommand{\PIR}{\mathsf{PIR}}
+\newcommand{\Punct}{\mathsf{Puncture}}
+\newcommand{\PunctEval}{\mathsf{PunctureEval}}
+
+\def \LPN{\mathsf{LPN}}
+\def \errordist{\chi}
+\def \supp{\mathsf{Supp}}
+
+\def \query{\mathsf{Query}}
+\def \send{\mathsf{Send}}
+\def \retrieve{\mathsf{Retrieve}}
+
+\def \quer{\mathsf{q}}
+\def \resp{\mathsf{r}}
+
+\def \puncture{\mathsf{Punct}}
+\def \evalpunct{\mathsf{EvalPunct}}
+\def \PPRF{\mathsf{PPRF}}
+
+\def \key{\mathsf{K}}
+\def \evalshrink{\mathsf{Eval\& Shrink}}
+
+\def \OT{\mathsf{OT}}
+\def \OTR{\mathsf{OTR}}
+\def \OTS{\mathsf{OTS}}
+\def \OTD{\mathsf{OTD}}
+
+\def \LHE{\mathsf{LHE}}
+\newcommand{\DBn}{\mathbf{DB}}
+\def \OLE{\mathsf{OLE}}
+\def \OLER{\mathsf{OLER}}
+\def \OLES{\mathsf{OLES}}
+\def \OLED{\mathsf{OLED}}
+
+\def \OMV{\mathsf{OMV}}
+\def \OMVR{\mathsf{OMVR}}
+\def \OMVS{\mathsf{OMVS}}
+\def \OMVD{\mathsf{OMVD}}
+
+\def \omv{\mathsf{omv}}
+\def \ole{\mathsf{ole}}
+\def \AffineDecomp{\mathsf{AffineDecomp}}
+
+\def \RowMatrix{\mathsf{RowMatrix}}
+\def \SingleRowMatrix{\mathsf{SingleRowMatrix}}
+\def \Diag{\mathsf{Diag}}
+
+\def \funcPPRFGGM{\mathcal{F}_{\mathsf{PPRF}\text{-}\mathsf{GGM}}}
+
+\def \funcPPRFGGM{\mathcal{F}_{\mathsf{PPRF}\text{-}\mathsf{GGM}}}
+\def \PPRFGGM{\mathsf{PPRF}\text{-}\mathsf{GGM}} 
+\def \pprfggm{\mathsf{pprf}\text{-}\mathsf{ggm}} 
+
+\newcommand{\ot}{\mathsf{ot}}
+\def \CoOT{\mathsf{CoOT}}
+\def \coot{\mathsf{coot}}
+\def \rec{\mathsf{Rec}}
+\def \sen{\mathsf{Sen}}
+\def \CoPIR{\mathsf{CoPIR}}
+\def \copir{\mathsf{copir}}
+
+\newcommand{\gaussround}[2]{\left\lceil #1 \right\rfloor_{#2}}
+\def \shrink{\mathsf{Shrink}}
+\def \shrinkdec{\mathsf{ShrinkDec}}
+\def \decshrink{\mathsf{DecShrink}}
+
+\newcommand{\name}{\textsc{Spirit}}
+
+\newcommand{\gen}{\ensuremath{\mathsf{Gen}}}
+\newcommand{\mkgen}{\ensuremath{\mathsf{MKGen}}}
+\newcommand{\opkgen}{\ensuremath{\mathsf{OPKGen}}}
+\newcommand{\oskgen}{\ensuremath{\mathsf{OSKGen}}}
+%\newcommand{\tkgen}{\ensuremath{\mathsf{TKGen}}}
+\newcommand{\track}{\ensuremath{\mathsf{Track}}}
+\newcommand{\ftkgen}{\ensuremath{\mathsf{FTKGen}}}
+\newcommand{\ftrack}{\ensuremath{\mathsf{FTrack}}}
+\newcommand{\msk}{\ensuremath{\mathsf{msk}}}
+\newcommand{\mpk}{\ensuremath{\mathsf{mpk}}}
+\newcommand{\mtk}{\ensuremath{\mathsf{mtk}}}
+\newcommand{\opk}{\ensuremath{\mathsf{opk}}}
+\newcommand{\osk}{\ensuremath{\mathsf{osk}}}
+\newcommand{\tki}{\ensuremath{\mathsf{tki}}}
+\newcommand{\tk}{\ensuremath{\mathsf{tk}}}
+\newcommand{\tempk}{\ensuremath{\mathsf{epk}}}
+\newcommand{\ftki}{\ensuremath{\mathsf{ftki}}}
+\newcommand{\ftk}{\ensuremath{\mathsf{ftk}}}
+\newcommand{\fpk}{\ensuremath{\mathsf{fpk}}}
+\newcommand{\ek}{\ensuremath{\mathsf{ek}}}
+\newcommand{\dk}{\ensuremath{\mathsf{dk}}}
+\newcommand{\flag}{\ensuremath{\mathsf{flag}}}
+\newcommand{\fmd}{\ensuremath{\mathsf{FMD}}}
+\newcommand{\getid}{\ensuremath{\mathsf{getIdentity}}}
+\newcommand{\Dil}{\ensuremath{\mathsf{Dil}}}
+\newcommand{\Kyb}{\ensuremath{\mathsf{Kyber}}}
+\newcommand{\ke}{\ensuremath{\mathsf{KE}}}
+\newcommand{\kem}{\ensuremath{\mathsf{KEM}}}
+\newcommand{\pke}{\ensuremath{\mathsf{PKE}}}
+\newcommand{\pRgv}{\ensuremath{\mathsf{pRgv}}}
+\newcommand{\DS}{\ensuremath{\mathsf{DS}}}
+\renewcommand{\SS}{\ensuremath{\mathsf{SS}}}
+\newcommand{\wSS}{\ensuremath{\mathsf{wSS}}}
+\newcommand{\support}{\ensuremath{\mathsf{SUPP}}}
+
+\newcommand{\eufcmawoke}{\ensuremath{\mathsf{EUFCMA}_\mathsf{w/o-ke}}}
+\newcommand{\seufcmawoke}{\ensuremath{\mathsf{sEUFCMA}_\mathsf{w/o-ke}}}
+\newcommand{\unlinkwoke}{\ensuremath{\mathsf{UNLNK}_\mathsf{w/o-ke}}}
+\newcommand{\unlinkwke}{\ensuremath{\mathsf{UNLNK}_\mathsf{w-ke}}}
+\newcommand{\eufcmawke}{\ensuremath{\mathsf{EUFCMA}_\mathsf{w-ke}}}
+\newcommand{\seufcmawke}{\ensuremath{\mathsf{sEUFCMA}_\mathsf{w-ke}}}
+\newcommand{\unlinkfwke}{\ensuremath{\mathsf{UNLNK}_\mathsf{fw-ke}}}
+\newcommand{\unlinkfswke}{\ensuremath{\mathsf{UNLNK}_\mathsf{f^sw-ke}}}
+\newcommand{\ufnmawoke}{\ensuremath{\mathsf{UFNMA}_\mathsf{w/o-ke}}}
+\newcommand{\ufnma}{\ensuremath{\mathsf{UFNMA}}}
+\newcommand{\ufcma}{\ensuremath{\mathsf{UFCMA}}}
+\renewcommand{\eufcma}{\ensuremath{\mathsf{EUFCMA}}}
+\renewcommand{\seufcma}{\ensuremath{\mathsf{sEUFCMA}}}
+\newcommand{\ikcpa}{\ensuremath{\mathsf{IKCPA}}}
+\newcommand{\uniamb}{\ensuremath{\mathsf{UNIAMB}}}
+\newcommand{\uniubs}{\ensuremath{\mathsf{UNIUBS}_\mathsf{f^s}}}
+\renewcommand{\indcpa}{\ensuremath{\mathsf{INDCPA}}}
+\newcommand{\anocca}{\ensuremath{\mathsf{ANOCCA}}}
+\newcommand{\encaps}{\ensuremath{\mathsf{Encaps}}}
+\newcommand{\decaps}{\ensuremath{\mathsf{Decaps}}}
+
+\newcommand{\mlwe}{\ensuremath{\mathsf{MLWE}}}
+\newcommand{\lwe}{\ensuremath{\mathsf{LWE}}}
+\newcommand{\DLog}{\ensuremath{\mathsf{DLog}}}
+\newcommand{\msis}{\ensuremath{\mathsf{MSIS}}}
+\newcommand{\selfmsis}{\ensuremath{\mathsf{SelfTargetMSIS}}}
+\newcommand{\hardness}{\ensuremath{\mathsf{sec}}}
+
+\newcommand{\OK}{\ensuremath{\mathsf{OK}}}
+\newcommand{\corrupt}{\ensuremath{\mathsf{Cor}}}
+\newcommand{\highbits}{\ensuremath{\mathsf{HighBits}}}
+\newcommand{\makehint}{\ensuremath{\mathsf{MakeHint}}}
+\newcommand{\expanda}{\ensuremath{\mathsf{ExpandA}}}
+\newcommand{\expands}{\ensuremath{\mathsf{ExpandS}}}
+\newcommand{\powerround}{\ensuremath{\mathsf{power2Round}}}

@@ -1,0 +1,554 @@
+%!TEX root = ../dissertation.tex
+
+\chapter{Threshold Private Set Intersection}
+\label{sec:threshpsi}
+\newthought{In this chapter}, we begin by addressing the first problem in privacy-preserving computation, known as threshold private set intersection (tPSI) in a multiparty setting. Our investigation focuses on the communication bandwidth of tPSI, and we present improvements to its asymptotic performance.
+
+To recap, threshold private set intersection enables multiple parties to calculate the intersection of their input sets, provided that the intersection is larger than $n-t$, where $n$ represents the size of each set and $t$ is a predetermined threshold. The primary advantage of this primitive is that, unlike standard private set intersection (PSI), the established upper bounds on communication complexity depend solely on the threshold $t$ and not on the input sets' sizes.
+   
+Current tPSI protocols are divided into two components: A cardinality testing phase, where parties determine if the intersection is larger than a certain threshold; And a PSI phase, where the actual intersection is computed. The primary source of inefficiency in threshold PSI lies in the former component.
+
+In this chapter, we introduce a new cardinality testing protocol that enables $N$ parties to verify whether the intersection of their input sets is larger than $n-t$. The protocol results in a communication complexity of $\tilde{\mathcal{O}}(Nt^2)$. Consequently, we obtain a threshold PSI scheme for $N$ parties with a communication complexity of $\tilde{\mathcal{O}}(Nt^2)$.
+
+
+\section{Overview}
+We first recall the definition of PSI as follows.
+Suppose Alice holds a set $S_A$ and Bob a set $S_B$. 
+Private set intersection is a cryptographic primitive that allows each party to learn the intersection $S_A\cap S_B$ and nothing else. In particular, Alice gets no information about $S_B\setminus S_A$ (and vice-versa). The problem has attracted a lot of attention through the years, with an extended line of work proposing solutions in a variety of different settings (e.g., \cite{IEEESP:Meadows86,EC:FreNisPin04,C:KisSon05,ACNS:DMRY09,AC:DeCKimTsu10,CCS:DonCheWen13,USENIX:PinSchZoh14,USENIX:PSSZ15,CCS:KKRT16,EC:RinRos17,PKC:HazVen17,CCS:RinRos17,EC:PSWW18,EC:GhoNil19,C:GhoSim19,C:PRTY19}). Also, numerous applications have been proposed for PSI such as contact discovery, advertising, etc (see for example \cite{EPRINT:IKNPSS17} and references therein). More recently, PSI has also been proposed as a solution for private contact tracing (e.g., \cite{berke2020assessing}). 
+
+\paragraph{Threshold PSI.}
+ 
+ In this chapter, we focus on a special set of PSI called \emph{Threshold PSI}. Here, the parties involved in the protocol learn the output if the size of the intersection between the input sets of the parties is very large, say larger than $n-t$, where $n$ is the size of the input sets and $t$ is some \emph{threshold} such that $t\ll n$; Otherwise, they learn nothing about the intersection. This is in contrast with standard PSI where the parties always get the intersection, no matter its size.
+ 
+ The main reason for considering this problem (apart from its numerous applications which we discuss next) is that the amount of communication needed is much smaller than for standard PSI: In particular, there are threshold PSI protocols whose communication complexity depends only on the threshold $t$ and not on the size of the input sets as for standard PSI \cite{C:GhoSim19}.
+ 
+ Despite its theoretical and practical appeal, there are just a few works that consider this problem \cite{CSF:HalOrlSab17,EC:GhoNil19,C:GhoSim19}, and just one of them achieves communication complexity independent of $n$ \cite{C:GhoSim19}, in the two-party setting.
+ 
+ 
+\subsection{Applications of Threshold PSI}
+
+A wide number of applications have been suggested for threshold PSI in previous works such as applications for dating apps or biometric authentication mechanisms \cite{C:GhoSim19}. 
+
+One of the most interesting applications for threshold PSI is its use in carpooling (or ridesharing) apps. Suppose two (or more) parties are using a carpooling app, which allows them to share a vehicle if their routes have a large intersection. However, due to privacy issues, they do not want to make their itinerary public. Threshold PSI solves this problem in a simple way~\cite{CSF:HalOrlSab17}: The parties can engage in a threshold PSI protocol, learn the intersection of the routes and, if the intersection is large enough, share a vehicle. Otherwise, they learn nothing and their privacy is maintained.
+ 
+    
+\paragraph{PSI using Threshold PSI.}
+As we mentioned before,
+most of the current protocols for threshold PSI (including ours) are split into two parts: i) A \emph{cardinality testing}, where parties decide if the intersection is larger than $n-t$; And ii) secure computation of the intersection of the input sets (which we refer to as the PSI part). The communication complexity of these two parts should depend only on the threshold $t$ and not on the input sets' size $n$.
+    
+Threshold PSI protocols of this form can be used to efficiently compute the intersection, even when \emph{no threshold} on the intersection is known a priori by the parties, by doing an exponential search for the \emph{right} threshold. In this case, parties can proceed as follows: 
+\begin{enumerate}
+\item Run a cardinality testing for some $t$ (say $t=1$).
+\item If it succeeds, perform the PSI part. Else, run again the cardinality test for $t=2t$.
+\item Repeat Step 2 until the cardinality testing succeeds for some threshold $t$ and the set intersection is computed.
+\end{enumerate}{}
+    
+By following this blueprint, parties are sure that they overshoot the right threshold by a factor of at most $2$. That is if the intersection is larger than $n-t'$, then the cardinality testing will succeed for $t$ such that $t\geq t'> t/2$. Thus, they can compute the intersection incurring only in a factor of $2$ overhead over the best insecure protocol. In other words, PSI protocols can be computed with communication complexity depending on the size of the intersection, and not on the size of the sets.
+    
+This approach can be useful in scenarios where parties suspect that the intersection is large but they do not know exactly how large it is.
+    
+
+
+\subsection{Contributions}
+
+In the following discussion, $N$ represents the number of parties participating in a multiparty protocol, while $t$ refers to the threshold in a threshold PSI protocol. Here, we provide a concise overview of our results.
+
+\paragraph{Multi-party Cardinality Testing.} We develop a new cardinality testing scheme that allows $N$ parties to check if the intersection of their input sets, each having size $n$, is larger than $n-t$ for some threshold $t\ll n$. The protocol needs $\tilde \Oc(Nt^2)$ bits of information to be exchanged.
+
+Along the way, we develop new protocols to securely compute linear algebra-related functions (such as computing the rank of an encrypted matrix, inverting an encrypted matrix or even solving an encrypted linear system). Our protocols build on ideas of previous works~\cite{TCC:NisWei06,TCC:KMWF07}, except that our protocols are specially crafted for the multi-party case. Technically, we rely heavily on Threshold Public-Key Encryption schemes which are additively homomorphic (such schemes can be constructed from DDH \cite{IEEETIT:Elgamal85}, DCR \cite{EC:Paillier99}, or from several pairings assumptions \cite{C:BonBoySha04,TCC:BonGohNis05}) to perform linear operations.
+
+
+\paragraph{Multi-party Threshold PSI.} 
+We then show how our cardinality testing protocol can be used to build a Threshold PSI protocol in the multi-party setting. Our construction achieves communication complexity of $\tilde\Oc(Nt^2)$.
+
+\subsubsection{Concurrent Work}
+Recently, Ghosh and Simkin \cite{EPRINT:GhoSim19} updated their paper with a generalization to the multi-party case which is similar to the one presented in this paper in Section \ref{sec:mppsi}. However, they leave as a major open problem the design of a new Cardinality Testing that extends nicely to multiple parties, a problem on which we make relevant advances in this work.
+
+In a concurrent work, Badrinarayanan \emph{et al.} \cite{PKC:BMRR21} also proposed new protocols for threshold PSI in the multi-party setting. Their results complement ours. In particular, they propose an FHE-based approach to solve the same problem as we do with a communication complexity of $\Oc(Nt)$, where $N$ is the number of parties and $t$ is the threshold. However, we remark that the goal of our work was to reduce the assumptions needed for threshold PSI. They also propose a TPKE-based protocol that solves a slightly different problem: the parties learn the intersection if and only if the difference between the union and the intersection is small, that is, $|\left(\cup_{i=1}^N S_i\right)\setminus \left(\cap_{i=1}^N S_i\right)|$ is small\footnotemark, which is denoted as $\Fc_{\mathsf{TPSI\mhyphen diff}}$ in \cite{PKC:BMRR21}. This protocol achieves communication complexity of $\tilde \Oc(Nt)$. They achieve that result using completely different techniques from the ones used in this work. Namely, they noticed that computing the determinant of a Hankel matrix can be done in sublinear time in the size of the matrix. This implies that the cardinality testing of \cite{C:GhoSim19} can actually be realized in time  $\tilde \Oc(Nt)$.
+
+\footnotetext{It is a slightly different problem from the one we solve in this work. Here, we want to disclosure the intersection $\cap_{i=1}^N S_i$ if $|\cap_{i=1}^N S_i|\geq n-t$, which is denoted as $\Fc_{\mathsf{TPSI\mhyphen int}}$ in \cite{PKC:BMRR21}.}
+
+
+\section{Techniques}
+We now give a high-level overview of the techniques we use to achieve the results discussed above.
+
+\subsubsection{Threshold PSI: The Protocol of \cite{C:GhoSim19}}
+Consider two parties Alice and Bob, with their respective input, sets $S_A$ and $S_B$ of size $n$. Suppose that they want to know the intersection $S_A\cap S_B$ iff $|S_A\cap S_B|\geq n-t$ for some threshold $t \ll n$. To compute the intersection, both parties  encode their sets into polynomials $P_A(x)=\prod_i^n (x-a_i)$ and $P_B(x)=\prod_i^n (x-b_i)$ over a large finite field $\mathbb{F}$, where $a_i\in S_A$ and $b_i\in S_B$. The main observation of Ghosh and Simkin \cite{C:GhoSim19} is that  \emph{set reconciliation techniques} (developed by Minsky et al. \cite{minsky03}) can be applied in this scenario: if $|S_A\cap S_B|\geq n-t$, then $$\frac{P_A(x)}{P_B(x)}=\frac{P_{A\cap B}(x)}{P_{A\cap B}(x)}\frac{P_{A\setminus B}(x)}{P_{B\setminus A}(x)}=\frac{P_{A\setminus B}(x)}{P_{B\setminus A}(x)}$$ and, moreover, $\deg P_{A\setminus B}=\deg P_{B\setminus A}=t$. Hence, Alice and Bob just need to (securely) compute $\Oc(t)$ evaluation points of the rational function $P_A(x)/P_B(x)=P_{A\setminus B}(x)/P_{B\setminus A}(x)$ and, after interpolating over these points, Bob can recover the denominator (which reveals the intersection). 
+
+ Of course, Bob should not be able to recover the numerator $P_{A\setminus B}$, otherwise, security is compromised. So, \cite{C:GhoSim19} used an Oblivious Linear Evaluation (OLE) scheme to \emph{mask} the numerator with a random polynomial that hides $P_{A\setminus B}$ from Bob.
+
+This protocol is only secure if Alice and Bob are absolutely sure that  $|S_A\cap S_B|\geq n-t$. Otherwise, additional information could be leaked about the respective inputs. Consequently, Alice and Bob should perform a \emph{cardinality testing} protocol, which reveals if $|S_A\cap S_B|\geq n-t$ and nothing else. 
+
+
+\paragraph{Limitations of the protocol when extending to the multi-party setting.} It turns out that the main source of inefficiency when extending the Ghosh and Simkin protocol to the multi-party setting is the cardinality testing they use. In \cite{C:GhoSim19}, Alice and Bob  encode their sets into polynomials $Q_A(X)=\sum^n_ix^{a_i}$ and $Q_B(X)=\sum^n_ix^{b_i}$, respectively, where $a_i\in S_A$ and $b_i\in S_B$. Then, they can check if $\tilde Q(x)=Q_A(x)-Q_B(x)$ is a \emph{sparse} polynomial. If it is, we conclude that the set $(S_A\cup S_B)\setminus (S_A\cap S_B)$ is small. By disposing of $\Oc(t)$ evaluations of the polynomial $\tilde Q(x)$ in a Hankel matrix \cite{GJR10} and securely computing its determinant (via a generic secure linear algebra protocol from \cite{TCC:KMWF07}), both parties can determine if $|S_A\cap S_B|\geq n-t$. The total communication complexity of this protocol is $\Oc(t^2)$.\footnotemark
+
+\footnotetext{Given this, we conclude that the communication complexity of the threshold PSI protocol of \cite{C:GhoSim19} is dominated by this cardinality testing protocol.}
+
+However, if we were to \emph{naively} extend this approach to the multi-party setting, we would have $N$ parties computing, say, $$\tilde Q(x)=N Q_1(x)-Q_2(x)- \dots - Q_N(x)$$ which is a sparse polynomial only if $N$ is small. Moreover, if we were to compute the sparsity of this polynomial using the same approach, we would have a protocol with communication complexity $\Oc((Nt)^2)$.
+
+\subsubsection{Our Approach}
+
+Given the state of affairs presented in the previous section, it seems we need to take a different approach from the one of \cite{C:GhoSim19} if we want to design an efficient threshold PSI protocol for multiple parties.
+
+
+\paragraph{Interlude: Secure Linear Algebra.} Recall that in the setting of \emph{secure linear algebra} (as in \cite{TCC:NisWei06} and \cite{TCC:KMWF07}), there are two parties, one holding encryption of a matrix $\mathsf{Enc}(\pk,\Mn)$ and the other one holding the corresponding secret key $\sk$. Their goal is to compute an encryption of a (linear algebra-related) function of the matrix $\Mn$, such as the rank, the determinant of $\Mn$, or, most importantly,  find a solution $\xn$ for the linear system $\Mn\xn=\yn$ where both $\Mn$ and $\yn$ are encrypted. We can easily extend this problem to the multi-party case: Consider $N$ parties, $\Ps_1,\dots, \Ps_N$, each one holding a share of the secret key of a threshold PKE scheme. Additionally, $\Ps_1$ has an encrypted matrix. The goal of all the parties is to compute an encryption of a (linear algebra-related) function of the encrypted matrix.
+
+
+We observe that the protocols for secure linear algebra presented in \cite{TCC:KMWF07} can be extended to the multiparty setting by replacing the use of an (additively homomorphic) PKE and garbled circuits for an (additively homomorphic) threshold PKE\footnotemark. Hence, our protocols allow $N$ parties to solve a linear system of the form $\Mn\xn=\yn$ under the hood of a threshold PKE scheme.
+
+\footnotetext{We need a bit-conversion protocol such as \cite{EC:SchTuy06} to convert between binary circuits and algebra operations.}
+
+\paragraph{Cardinality Testing via Degree Test of a Rational Function.}
+
+Consider again the  encodings $P_{S_i}(x)=\prod_j^n (x-a^{(i)}_j)$ where $a^{(i)}_j\in S_i$, for $N$ different sets, and the rational function\footnote{We actually need to randomize the polynomials in the numerator to guarantee correctness, that is, we need to multiply each term in the numerator by a uniformly chosen element. This is in contrast with the two-party setting where correctness holds even without randomizing the numerator. However, we omit this step for simplicity.}  
+$$\frac{P_{S_1}+\dots + P_{S_N}}{P_{S_1}}=\frac{P_{S_1\setminus (\cap_{j=1}^N S_j)}+ \dots +P_{S_N\setminus (\cap_{j=1}^{N} S_j)}}{P_{S_1\setminus (\cap_{j=1}^N S_j)}}.$$ Note that, if the intersection $\cap S_i $ is larger than $n-t$, then $\deg P_{S_1\setminus (\cap_{j=1}^N S_j)}=\dots =\deg P_{S_N\setminus (\cap_{j=1}^{N} S_j)}\leq t$.
+
+
+Therefore, the cardinality testing boils down to the following problem: Given a rational function $f(x)=\tilde P_1(x)/\tilde P_2(x)$, can we securely decide if  $\deg \tilde P_1=\deg \tilde P_2\leq t$ having access to $\Oc(t)$ evaluation points of $f(x)$? 
+
+Our crucial observation is that, if we interpolate two different rational functions $f_V$ and $f_W$ on different two support sets $V=\{v_i,f(v_i)\}$ and $W=\{w_i,f(w_i)\}$ each one of size $2t$, then we have: \begin{enumerate}
+    \item $f_V=f_W$ if $\deg P_1=\deg P_2\leq t$
+    \item $f_V\neq f_W$ if $\deg P_1=\deg P_2> t$
+\end{enumerate}{} except with negligible probability over the uniform choice of $v_i,w_i$.
+
+Moreover, interpolating a rational function can be reduced to solving a linear system of equations. Hence, by using the Secure Linear Algebra tools developed before, we can perform the \emph{degree test} revealing nothing else than the output. In other words, we can decide if the size of the intersection is smaller than $n-t$ while revealing no additional information about the parties' input sets.
+
+
+
+\paragraph{Security of the protocol.}
+We prove the security of our  cardinality testing in the UC framework \cite{FOCS:Canetti01}. However, there is a subtle issue with our security proof. Namely, our secure linear algebra protocols cannot be proven UC-secure since the inputs are encrypted under a public key which, in the UC setting, needs to come from somewhere. 
+
+We solve this problem by using the Externalized UC framework \cite{TCC:CDPW07}. In this framework, the secure linear algebra ideal functionalities all share a common setup which, in our case, is the public key (and the corresponding secret key shares). We prove the security of our secure linear algebra protocols in this setting. 
+
+
+Since the secure linear algebra protocols are secure if they all share the same public key, then, on the cardinality testing, we just need to create this public key and share it over these functionalities. Thus, we prove the standard UC-security of our cardinality testing.
+
+Badrinarayanan et al. \cite{PKC:BMRR21} also encounter the same problem as we did and they opted to not prove the security of each subprotocol individually, but rather prove security only for their main protocol (where the public key is created and shared among these smaller protocols).
+
+\paragraph{Multi-party PSI.}  Having developed cardinality testing, we can now focus on securely computing the intersection. In fact, our protocol for computing the intersection can be seen as a \emph{generalization} of Gosh and Simkin protocol \cite{C:GhoSim19}. Again, by encoding the sets as above  (that is, $P_{S_i}(x)=\prod_j^n (x-a^{(i)}_j)$ where $a^{(i)}_j\in S_j$ and $S_j$ is the set of party $\Ps_j$) and knowing that the intersection is larger than $n-t$, parties can securely compute the rational function\footnotemark $(P_{S_1}+\dots + P_{S_N})/P_{S_1}$. By interpolating the rational function on any $\Oc(t)$ points, party $\Ps_1$ can recover the denominator and compute the intersection.
+
+\footnotetext{Again, we omit the randomization of the polynomials. Actually, without randomization, these methods (including \cite{C:GhoSim19}) are exactly the same as the technique for the set reconciliation problem in \cite{minsky03}.}
+
+The main difference between our protocol and the one in \cite{C:GhoSim19} is that we replace the OLE calls used in \cite{C:GhoSim19} with a threshold additively homomorphic PKE scheme (which can be seen as the multi-party replacement of OLE).
+
+
+
+\subsection{Other Related Work}
+\paragraph{Oblivious Linear Algebra.} Cramer and Damgård \cite{C:CraDam01} introduced a constant-round protocol to securely solve linear systems of unknown rank over a finite field. Although their main focus was on round optimality, their proposal's communication cost is $\Omega(t^3)$ for an input size of $\Oc(t^2)$. Bouman et al. \cite{Bouman2018NewPF} recently developed a secure linear algebra protocol for multiple parties, with their focus being on computational complexity.
+
+Other secure linear algebra schemes in the two-party setting have been presented by Nissim and Weinreb in \cite{TCC:NisWei06} and Kiltz et al. in \cite{TCC:KMWF07}. In the following, we consider (square) matrices of size $t$ over a field $\FF$. These two works employ different approaches: \cite{TCC:NisWei06} addresses linear algebra-related problems obliviously via Gaussian elimination, resulting in an $\Oc(t^2)$ communication complexity for a square matrix of size $t$. However, their approach has an error probability that decreases polynomially with $t$, meaning that the error probability is only sufficiently small when applied to a linear system with large matrices. On the other hand, \cite{TCC:KMWF07} has an error probability that decreases polynomially with $|\FF|$, making it negligible when $\FF$ is of exponential size.\footnotemark
+
+\footnotetext{ This is important to us since, in the threshold PSI setting, $t\ll n$ where $t$ is the threshold and $n$ is the set size. Kiltz et al. solve linear algebra problems via minimal polynomials, and use adaptors between garbled circuits and additive homomorphic encryption to reduce round complexity. In this work, we extend Kiltz's protocol to the multiparty case without using garbled circuits (otherwise the circuit size would depend on the number of parties) while preserving the same communication complexity for each party ($\Oc(t^2)$).}
+
+
+\section{Definitions}
+
+\paragraph{Multi-Party Threshold  Private Set Intersection.} This ideal functionality implements the multi-party version of the functionality above. Here, each of the $N$ parties inputs a set and they learn the intersection if and only if the intersection is large enough.
+
+
+\begin{center}
+\fbox{\begin{minipage}{30em}
+\begin{center}
+\textbf{$\Fc_\mathsf{MTPSI}$ functionality}
+\end{center}
+\paragraph{Parameters:} $\sid, N,t\in\NN$ known to both parties.
+\begin{itemize}
+\item Upon receiving $(\sid,\Ps_i,S_i)$ from party $\Ps_i$, $\Fc_{\mathsf{MTPSI}}$ stores $S_i$ and ignores future messages from $\Ps_i$ with the same $\sid$. 
+\item Once $\Fc_{\mathsf{MTPSI}}$ has stored all inputs $S_i$, for $i\in [n]$, it does the following: If $|S_1\setminus \left(\cap_{i=2}^N S_i\right)|\leq t$, $\Fc_{\mathsf{MTPSI}}$ outputs $S_\cap=\cap_{i=1}^N S_i$. Else, it outputs $\perp$.
+\end{itemize}
+\end{minipage}}
+\end{center}
+
+\subsubsection{Externalized UC Protocol with Global Setup} We introduce a notion of protocol
+emulation from \cite{TCC:CDPW07}, called externalized UC emulation (EUC), which is a simplified version of UC with a global setup (GUC).
+
+
+\begin{definition}[EUC-Emulation \cite{TCC:CDPW07}]
+ We say that $\pi$ EUC-realizes $\Fc$ with respect to shared functionality $\bar{\Gc}$ (or, in shorthand,
+that $\pi$ $\bar{\Gc}$-EUC-emulates $\phi$) if for any PPT adversary $\Ac$ there exists a PPT adversary $\Sim$ such that
+for any shared functionality $\bar \Gc$, we have:
+$$
+\IDEAL^{\bar{\Gc}}_{\Fc,\Sim,\Zc}
+\approx 
+\EXEC^{\bar{\Gc}}_{\pi,\Ac,\Zc}
+$$
+\end{definition}
+
+
+Notice that the formalism implies that the shared functionality $\bar{\Gc}$ exists
+both in the model for executing $\pi$ and also in the model for executing the ideal protocol for $\Fc$,
+$\IDEAL_\Fc$.
+
+We remark that the notion of $\bar{\mathcal{G}}$-EUC-emulation can be naturally extended to protocols that use
+several different shared functionalities (instead of only one).
+
+Throughout this work, $\phi$ will denote the Euler's totient function. 
+
+
+Let $\Phi_{\ZZ,\beta}$ be the distribution that outputs a uniformly chosen value in $\ZZ$ from the interval $[-\beta,\beta]$. We call \emph{shifted rectangle} to this distribution \cite{FOCS:AppIshKus11}. The following lemma states that we can \emph{drown} (i.e., statistically hide) a value using  a sample from a  much wider $\Phi_{\ZZ,\beta}$ distribution.
+\begin{lemma}[Drowning \cite{FOCS:AppIshKus11}]
+\label{lemma:drown}
+Let $B_0\in\NN$ and $\beta\in\ZZ$ and let $e_0\in[-B_0,B_0]$. Let $e_1\sample \Phi_{\ZZ,\beta}$. If $B_0/\beta=\negl[\lambda]$ then $e_1\approx_{\negl[\lambda]}e_0+e_1$.
+\end{lemma}
+
+
+\section{Oblivious Degree Test for Rational Functions}\label{sec:degree}
+
+Suppose we have a rational function $f(x)=P(x)/Q(x)$ where $P(x)$ and $Q(x)$ are two polynomials with the same degree. In this section, we present a protocol that allows several parties to check if  $\deg P(x)=\deg Q(x) \leq t$ for some threshold $t\in Z$. To this end, and inspired by the works of \cite{TCC:NisWei06,TCC:KMWF07}, we present a multi-party protocol to obliviously solve a linear system $\Mn\xn=\yn$ over a finite field $\FF$ with communication complexity $O(t^2k\lambda N)$, where $\Mn\in\FF^{t\times t}$, $\log |\FF|=k$ and $N$ is the number of parties involved in the protocol.
+
+\subsection{Oblivious Linear Algebra}
+
+In this section, we state the Secure Linear Algebra protocols that we need to build our degree test protocol. For the sake of briefness, the protocols are presented in Appendix \ref{sec:oblLinearAlg}. These protocols all have the following form: There is a public key of a TPKE that encrypts a matrix $\Mn$ and every party involved in the protocol has a share of the secret key.
+
+Note that if we let parties $\Ps_i$ input their encrypted matrix $\enc(\Mn)$, then the ideal functionality $\Fc$ has to know the secret key (by receiving secret key shares from all parties), otherwise $\Fc$ cannot compute the corresponding function correctly. However, this will cause an unexpected problem in security proof as mentioned in our introduction and \cite{PKC:BMRR21}: The environment $\mathcal{Z}$ will learn the secret key as well since it can choose inputs for all parties. We fix this by relying on a global UC framework where exists a shared functionality $\bar{\mathcal{G}}$ in charge of distributing key pairs ($\Fc_\mathsf{Gen}$ from Section \ref{subsec:TPKE}).
+
+
+
+
+\subsubsection{Oblivious matrix multiplication}
+\label{sec:secMult}
+We begin by presenting the ideal functionality for a multi-party protocol to jointly compute the product of two matrices, under a TPKE. The protocol is presented in Appendix \ref{appen:OMM}.
+
+
+\paragraph{Ideal functionality.} The ideal functionality for oblivious matrix multiplication is presented below.
+
+\begin{center}
+\fbox{\begin{minipage}{30em}
+\begin{center}
+\textbf{$\Fc_{\mathsf{OMM}}$ functionality}
+\end{center}
+\paragraph{Parameters:} $\sid, N,q,t\in\NN$ and $\FF$, where $\FF$ is a field of order $q$, known to the $N$ parties involved in the protocol. 
+\paragraph{Global Setup:} $\pk$ public-key of a threshold PKE scheme and $\sk_i$ distributed to each party $\Ps_i$ via $\Fc_\mathsf{Gen}$.
+\begin{itemize}
+\item Upon receiving $(\sid,\Ps_1,\enc(\pk,\Mn_l),\enc(\pk,\Mn_r))$ from party $\Ps_1$ (where $\Mn_l,\Mn_r\in\FF^{t\times t}$), $\Fc_{\mathsf{OMM}}$ outputs $\enc(\pk,\Mn_l\cdot \Mn_r)$ to $\Ps_1$ and $(\enc(\pk,\Mn_l),\enc(\pk,\Mn_r),\enc(\pk,\Mn_l\cdot \Mn_r))$ to all other parties $\Ps_i$, for $i=2,\dots ,N$.
+\end{itemize}
+\end{minipage}}
+\end{center}
+
+
+
+\subsubsection{Securely Compute the Rank of a Matrix}
+
+We present the ideal functionality to obliviously compute the rank of an encrypted matrix. The protocol is presented in Appendix \ref{sec:secRank}.
+
+ \paragraph{Ideal Functionality.} The ideal functionality of oblivious rank computation is defined below. 
+ \begin{center}
+\fbox{\begin{minipage}{30em}
+\begin{center}
+\textbf{$\Fc_{\mathsf{ORank}}$ functionality}
+\end{center}
+\paragraph{Parameters:} $\sid, N,q,t\in\NN$ and $\FF$, where $\FF$ is a field of order $q$, known to the $N$ parties involved in the protocol. 
+\paragraph{Global Setup:} $\pk$ public-key of a threshold PKE scheme and $\sk_i$ distributed to each party $\Ps_i$ via $\Fc_\mathsf{Gen}$.
+\begin{itemize}
+\item Upon receiving $(\sid,\Ps_1,\enc(\pk,\Mn))$ from party $\Ps_1$ (where $\Mn\in\FF^{t\times t}$), $\Fc_{\mathsf{ORank}}$ outputs $\enc(\pk,\rank( \Mn))$ to $\Ps_1$ and $(\enc(\pk,\Mn),\enc(\pk,\mathrm{rank} (\Mn))$ to all other parties $\Ps_i$, for $i=2,\dots ,N$.
+\end{itemize}
+\end{minipage}}
+\end{center}
+
+
+\subsubsection{Oblivious Linear System Solver}
+We now show how $N$ parties can securely solve a linear system using the multiplication protocol above. We follow the ideas from \cite{TCC:KMWF07} to reduce the problem to minimal polynomials, and the only difference is we focus on multiparty settings.
+ 
+The protocol is presented in Appendix \ref{sec:secLS}.
+Informally, we evaluate an arithmetic circuit following the ideas of \cite{EC:CraDamNie01}, and for the unary representation, a binary-conversion protocol \cite{EC:SchTuy06} is required. All of the above protocols can be based on the Paillier cryptosystem. 
+
+
+ \paragraph{Ideal Functionality.} We give an ideal functionality of oblivious linear system solver for multiparty as follows.
+ 
+\begin{center}
+\fbox{\begin{minipage}{30em}
+\begin{center}
+\textbf{$\Fc_{\mathsf{OLS}}$ functionality}
+\end{center}
+\paragraph{Parameters:} $\sid, N,q,t\in\NN$  and $\FF$, where $\FF$ is a field of order $q$ , known to the $N$ parties involved in the protocol. $\pk$ public-key of a threshold PKE scheme. 
+\paragraph{Global Setup:} $\pk$ public-key of a threshold PKE scheme and $\sk_i$ distributed to each party $\Ps_i$ via $\Fc_\mathsf{Gen}$.
+\begin{itemize}
+\item Upon receiving $(\sid,\Ps_1,\enc(\pk,\Mn),\enc(\pk, \yn))$ from party $\Ps_1$ (assuming there is a solution $\xn$ for $\Mn\xn=\yn$), $\Fc_{\mathsf{OLS}}$ outputs $\enc(\pk,\xn)$ such that $\Mn\xn=\yn$.
+\end{itemize}
+\end{minipage}}
+\end{center}
+
+
+
+\subsection{Oblivious Degree Test}
+\label{subsec:degtest}
+We now present the main protocol of this section and the one that will be used in the construction of threshold PSI. Given a rational function $P(x)/Q(x)$ (for two polynomials $P(x)$ and $Q(x)$ with the same degree) and two support sets $V_1,V_2$, the protocol allows us to test if the degree of the polynomials is less than some threshold $t$. Of course, we can do this using generic approaches like garbled circuits. However, we are interested in solutions with communication complexity depending on $t$ (even when the degree of $P(x)$ or $Q(x)$ is much larger than $t$). 
+
+\paragraph{Ideal functionality.} The ideal functionality for the degree test of rational functions is presented below.
+
+\begin{center}
+\fbox{\begin{minipage}{30em}
+\begin{center}
+\textbf{$\Fc_{\mathsf{SDT}}$ functionality}
+\end{center}
+\paragraph{Parameters:} $\sid, N,q,n,t\in\NN$, $\FF$ is a field of order $q$ and $t$ is a pre-defined threshold, known to the $N$ parties involved in the protocol. $\pk$ public-key of a threshold PKE scheme. $\alpha_1,\dots,\alpha_{4t+2}\sample\FF$ known to the $N$ parties.
+\paragraph{Global Setup:} $\pk$ public-key of a threshold PKE scheme and $\sk_i$ distributed to each party $\Ps_i$ via $\Fc_\mathsf{Gen}$.
+\begin{itemize}
+\item Upon receiving $(\sid,\Ps_1,\enc(\pk,f_1),\dots,\enc(\pk,f_{4t+2}))$ from party $\Ps_1$ (where $f_i={P_1(\alpha_i)}/{P_2(\alpha_i)}$, and $P_1,P_2$ are two co-prime polynomials with same degree $t'$ (additionally, $P_2$ is monic), $\Fc_{\mathsf{SDT}}$ outputs $0$ if $t'\le t$; otherwise it outputs $1$.
+\end{itemize}
+\end{minipage}}
+\end{center}
+
+\paragraph{Protocol.} We present the Protocol \ref{pro:secDT} for secure degree test which we denote by $\mathsf{secDT}$. The main idea of the protocol is to interpolate the rational function on two different support sets and check if the result is the same in both experiments.
+
+Recall that interpolating a rational function boils down to solving a linear equation. We can thus use the secure linear algebra tools developed to allow the parties to securely solve a linear equation. 
+
+Also recall that two rational functions $C_v^{(1)}/C_v^{(2)}=C_w^{(1)}/C_w^{(2)}$ are equivalent if $C_v^{(1)}C_w^{(2)}-C_w^{(1)} C_v^{(2)}=0$. Thus, in the end, parties just need to securely check if $C_v^{(1)}C_w^{(2)}-C_w^{(1)} C_v^{(2)}$ is equal to $0$.
+
+\begin{algorithm}
+\caption{Secure Degree Test $\mathsf{secDT}$}
+\label{pro:secDT}
+\begin{algorithmic}[1]
+\REQUIRE Each party has a secret key share $\sk_i$ for a public key $\pk$ of a $\mathsf{TPKE}=(\mathsf{Gen},\enc,\dec)$. The parties have access to the  ideal functionalities $\Fc_\mathsf{ORank}$, $\Fc_\mathsf{OLS}$, $\Fc_\mathsf{OMM}$ and $\Fc_\mathsf{DecZero}$. The values $\{\alpha_1,\dots,\alpha_{4t+2}\}\sample\FF^{4t+2}$ are public, from which also sampling a random point $\alpha'\sample \{\alpha_1,\dots,\alpha_{4t+2}\}$.
+
+\ENSURE Party $\Ps_1$ inputs $\{(\alpha_1,\enc(\pk,f_1)),\dots,(\alpha_{4t+2},\enc(\pk,f_{4t+2}))\}$, where $f_{i}=\frac{P_1(\alpha_i)}{P_2(\alpha_i)}$, where $P_1(x),P_2(x)$ are two polynomials with degree $\deg(P_1)=\deg(P_2)=t'=\poly[\log|\FF|]$ and such that $P_2(\alpha_i)\neq 0$  for all $i\in [2t]$.
+
+\STATE $\mathsf{P_1}$ sets $\{(\alpha_j,\enc(\pk,f_j))\}_{j\in [2t+1]}=\{(v_j,\enc(\pk,f_{v,j}))\}_{j\in[2t+1]}$, and $\{(\alpha_j,\enc(\pk,f_j))\}_{j\in \{2t+2,\dots ,4t+2\}}=\{(w_j,\enc(f_{w,j}))\}_{j\in[2t+1]}$. It homomorphically generates an encrypted linear system consisting of
+      $$\enc(\pk,\Mn_r)=\enc\left(\pk,\begin{bmatrix}
+        r_1^{t}&\dots&1&-f_{r,1}\cdot r_1^{t-1}&\dots&-f_{r,1}\\
+        \vdots&&\vdots&\vdots&&\vdots\\
+        r_{2t+1}^{t}&\dots&1&-f_{r,2t+1}\cdot r_{2t+1}^{t-1}&\dots&-f_{r,2t+1}\\
+      \end{bmatrix}\right)$$ and
+      $$\enc(\pk,\yn_r)=\enc\left(\pk,\begin{bmatrix}
+        f_{r,1}\cdot r_1^t\\
+        \vdots\\
+        f_{r,2t+1}\cdot r_{2t+1}^t
+      \end{bmatrix}\right)$$ for  $r=\{v,w\}$.\footnotemark
+      Here $\Mn_r$ is a square matrix with dimension $2t+1$ and $\yn_r$ a $2t+1$-sized vector.
+
+\STATE All parties jointly compute  $\enc(\pk,\rank(\Mn_r)-\rank\left(\left[\Mn_r||\yn\right]\right)$ for $ r\in\{v,w\}$ through two invocations of $\Fc_\mathsf{ORank}$ and mutually decrypt the ciphertext via $\Fc_\mathsf{DecZero}$. If the result is different from $0$, they abort the protocol.
+\STATE All parties mutually solve the two linear systems above using $\Fc_\mathsf{OLS}$ such that each party gets $\enc\left(\pk,\left(\cn_{v}^{(1)}||\cn_{v}^{(2)}\right)\right)$ and $\enc\left(\pk,\left(\cn_{w}^{(1)}||\cn_{w}^{(2)}\right)\right)$, where $\Mn_r\begin{bmatrix}\cn_{r}^{(1)}\\\cn_{r}^{(2)}\end{bmatrix}=\yn_r$, for $r\in\{v,w\}$. Besides, $\cn_r^{(1)}$ and $\cn_r^{(2)}$ are $t+1$- and $t$-sized vectors, respectively.
+
+\STATE All parties compute the polynomials $C_{r}^{(1)}(x)=\sum_{j=0}^t \cn^{(1)}_{r,j} x^{t-j}$, and $C_{r}^{(2)}(x)=x^t+\sum_{j=1}^{t} \cn_{r,j-1}^{(2)}x^{t-j}$, for $r\in\{v,w\}$, then compute $$\enc(\pk,z)=\enc(\pk, C_{v}^{(1)}(x)\cdot C_{w}^{(2)}(x)-C_{w}^{(1)}(x)\cdot C_{v}^{(2)}(x))$$ by invoking $\Fc_\mathsf{OMM}$.
+
+Here $C_{r}^{(b)}(x)$ are evaluated on a random selected point $\alpha'\sample \{\alpha_1,\dots,\alpha_{4t+2}\}$.
+
+\STATE All parties jointly use $\Fc_\mathsf{DecZero}$ to check if $z=0$. If it is, output $1$. Otherwise, output $0$.
+\end{algorithmic}
+\end{algorithm}
+
+\footnotetext{Note that this is the linear system that we need to solve in order to perform rational interpolation \cite{minsky03}.}
+% \footnotetext{The polynomial multiplication can be expressed as matrix multiplication.}
+
+\paragraph{Comments.}
+Suppose that, for an interpolation point $\alpha_i$, the rational function $f(x)=P(x)/Q(x)$ is well-defined but $Q(\alpha_i)=P(\alpha_i)=0$ such that we cannot compute $f(\alpha_i)$ by division. In this case
+\footnote{In the case that only $Q(\alpha_i)=0$, use a different tagged pair $(\enc(\pk, s^{(1)}_i),\enc(\pk, 0))$, and this can be noticed by the party who owns polynomial $Q(x)$. In our PSI setting, it is party $\Ps_1$.} 
+, the parties evaluate $\tilde P(x)=P(x)/(x-\alpha_i)$ and $\tilde Q(x)=Q(x)/(x-\alpha_i)$ on $\alpha_i$ and set $f(\alpha_i)=\tilde P(\alpha_i)/\tilde Q(\alpha_i)$. These points are called \emph{tagged values} and this strategy is used in \cite{minsky03}. In more details, instead of using $\enc(\pk,f_i)$ for $\alpha_i$, we will use a tagged pair $\left(\enc\left(\pk, s^{(1)}_i\right),\enc\left(\pk, s^{(2)}_i\right)\right)$ where $s^{(1)}_i=\frac{P_1(\alpha_i)}{x-\alpha_i}$ and $s^{(2)}_i=\frac{P_2(\alpha_i)}{x-\alpha_i}$. Correspondingly, replace each row of $\enc(\pk,\Mn_r)$ and $\enc(\pk,\yn_r)$ with $$\enc\left(\pk,\begin{bmatrix} s^{(2)}_ir_i^{t}&\dots&s^{(2)}_i &-s^{(1)}_i r_i^{t-1}&\dots&-s^{(1)}_i\end{bmatrix}\right)$$ and $\enc\left(\pk,\begin{bmatrix}s^{(1)}_ir_i^t\end{bmatrix}\right)$, respectively. 
+ 
+
+Also, note that the protocol easily generalizes to rational functions $f(x)=P(x)/Q(x)$ with $\deg P\neq \deg Q$ (which is actually what we use in the following sections). We present the version where $\deg P= \deg Q$ for simplicity. In fact, the case where $\deg P\neq \deg Q$ can be reduced to the presented case by multiplying the least degree polynomial by a uniformly chosen $R(x)$ of degree $\max\{\deg P(x)-\deg Q(X), \deg Q(x)-\deg P(x)\}$.
+
+Moreover, if $t'>t$, the linear system for rational interpolation might be unsolvable. In this case, there is no solution which means we cannot interpolate an appropriate rational function on certain support set. Therefore, the parties just return $0$.
+
+
+\paragraph{Analysis} We analyze correctness, security and communication complexity of the protocol. We begin the analysis with the following auxiliary lemma.
+
+\begin{lemma}\label{lem:negl-rational}
+  Let $\FF$ be a field with $|\FF|=\omega(2^{\log \lambda})$. Let $V=\{(v_i,f(v_i))|\forall i \in [1,2t+1]\}$ and $W=\{(w_i,f(w_i))|\forall i \in [1,2t+1]\}$ be two support sets each of them with $2t+1$ elements over a field $\FF$, with $w_i\sample \FF$, and  $f(x):=\frac{P(x)}{Q(x)}$ is some unknown reduced rational function (i.e., $P(x),Q(x)$ are co-prime), where $\deg(P)=\deg(Q)=t'$ and $t<t'$ where $t,t'\in\poly[\lambda]$. We also require $Q(x)$ to be monic (to fit in our application). Additionally, assume that $Q(v_i)\neq 0$ and $Q(w_i)\neq 0$ for every $i\in[2t+1]$.
+  
+  If we recover two rational function $f_V(x), f_W(x)$ by interpolation on $V,W$, respectively, then
+  $$\Pr\left[f_V(x)=f_W(x)\right]\leq \negl[\lambda]$$ over the choice of $v_i,w_i$.
+\end{lemma}
+\begin{proof}
+
+
+Let $f_V(x)=A(x)/B(x)$ the rational function recovered by rational interpolation over the support set $V$.
+and let $f(x)=P(x)/Q(x)$ be the rational function interpolated over any $2t'+1$ interpolation points.
+We have that $f_V(v_i)=f(v_i)$ for all $i\in [2t+1]$ and hence $$\frac{A(v_i)}{B(v_i)}=\frac{P(v_i)}{Q(v_i)}\Leftrightarrow A(v_i)Q(v_i)=P(v_i)B(v_i).$$ Since $\gcd(P(x),Q(x))=1$, then the polynomial $\tilde P(x)=A(x)Q(x)-P(x)B(x)$ is different from the null polynomial (as $\deg(P)=t'>t=\deg(A)$). Moreover, $v_i$ is a root of $\tilde P(x)$, for all $i\in [2t+1]$, and $\deg\tilde P(x)\leq t+t'$ (which means that $\tilde P(x)$ has at most $t+t'$ roots).
+
+Analogously, let $f_W=C(x)/D(x)$ be the rational function resulting from interpolating over the support set $W$ and let $\tilde Q(x)=C(x)Q(x)-D(x)P(x)$. We have that $\tilde Q(w_i)=0$ for all $i\in [2t+1]$. Hence, if  $f_V(x)=f_W(x)$, then we have that the points $w_i$ are also roots of $\tilde P(x)$. 
+
+But, since the points $w_i$ are chosen uniformly at random from $\FF$ (which is of exponential size when compared to $t,t'$), then there is a negligible probability that all $w_i$'s are roots of $\tilde P(x)$.
+
+Concretely, \begin{align*}
+    \Pr\left[f_V=f_W\right]& \leq \Pr\left[\tilde P(w_i)=0 \forall i [2t+1]\right]\\
+    &= \prod_i^{2t+1} \Pr\left[\tilde P(w_i)=0 \right] \le \left(\frac{\deg \tilde P}{|\FF|}\right)^{2t+1}
+\end{align*}{}
+which is negligible for $|\FF|\in\omega(2^{\log \lambda})$.
+\end{proof}
+
+
+
+\begin{theorem}[Correctness]
+The protocol $\mathsf{secDT}$ is correct.
+\end{theorem}{}
+\begin{proof}
+The protocol interpolates two polynomials from two different support sets. Then, it checks if the two interpolated polynomials are the same by computing  $$C_{v}^{(1)}(x)\cdot C_{w}^{(2)}(x)-C_{w}^{(1)}(x)\cdot C_{v}^{(2)}(x))$$ which should be equal to $0$ if $C_{v}^{(1)}(x)/ C_{v}^{(2)}(x)=C_{w}^{(1)}(x)/ C_{w}^{(2)}(x)$.
+
+If $t'\leq t$, then by Lemma \ref{lem:unique-rational-func}, there is a unique rational function that can be recovered thus the final output of the algorithm should be $1$. 
+%
+On the other hand, if $t'>t$, the linear system can be either unsolvable or solvable but yield two different solutions with overwhelming probability by Lemma \ref{lem:negl-rational}. In this case, the protocol outputs $0$.
+\end{proof}{}
+
+
+\begin{theorem}
+The protocol $\mathsf{secDT}$ EUC-securely realizes $\Fc_\mathsf{SDT}$ with shared ideal functionality $\Fc_\mathsf{Gen}$ in the $(\Fc_\mathsf{ORank},\Fc_\mathsf{OMM},$ $\Fc_\mathsf{OLS},\Fc_\mathsf{DecZero})$-hybrid model against semi-honest adversaries corrupting at most $N-1$ parties, given that $\mathsf{TPKE}$ is IND-CPA.
+\end{theorem}{}
+
+\begin{proof}[Proof (Sketch)]
+ The simulator sends the corrupted parties' input to the ideal functionality and obtains the output (either $0$ or $1$). Then, it simulates the ideal functionalities $(\Fc_\mathsf{ORank},\Fc_\mathsf{OMM},\Fc_\mathsf{OLS},\Fc_\mathsf{DecZero})$ so that the output in the real-world execution is the same as in the ideal-world execution. In particular, the simulator is able to recover the secret key shares via $\Fc_\mathsf{ORank},\Fc_\mathsf{OMM},\Fc_\mathsf{OLS}$ and, thus, simulate $\Fc_\mathsf{DecZero}$ in the right way. 
+
+Indistinguishability of executions holds given that $\mathsf{TPKE}$ is IND-CPA. 
+\end{proof}{}
+
+
+\paragraph{Communication complexity.}
+When we instantiate $\Fc_\mathsf{OLS}$ with the protocol from the previous section, the communication complexity of $\mathsf{secDT}$ is $\Oc(Nt^2)$.
+
+\section{Multi-Party Threshold Private Set Intersection}
+\label{sec:mppsi}
+
+We present our protocol for Threshold PSI in the multi-party setting. Our protocol to privately compute the intersection can be seen as a generalization of Ghosh and Simkin protocol \cite{C:GhoSim19} where we replace the OLE with a TPKE (which fits nicer in a multi-party setting). The main difference between our protocol and theirs is in  the cardinality test protocol used.
+
+We begin by presenting the protocol to securely compute cardinality testing between $N$ sets. Then, we plug everything together in a PSI protocol.
+
+\subsection{Secure Cardinality Testing}
+
+
+\paragraph{Ideal functionality.} The ideal functionality for Secure Cardinality Testing receives the sets from all the parties and outputs $1$ if and only if the intersection between these sets is larger than some threshold. Else, no information is disclosed. The ideal functionality for multi-party cardinality testing is given as follows.
+\begin{center}
+\fbox{\begin{minipage}{30em}
+\begin{center}
+\textbf{$\Fc_\MPCT$ functionality}
+\end{center}
+\paragraph{Parameters:} $\sid, N,n,t\in\NN$ known to both parties.
+\begin{itemize}
+\item Upon receiving $(\sid, \Ps_i, S_{i})$ from party $\Ps_i$, $\Fc_\MPCT$ stores $S_{i}$ and ignores future messages from $\Ps_i$ with the same $\sid$;
+\item Once $\Fc_\MPCT$ has stored all inputs $S_{i}$, for $i\in [N]$, it does the following:
+If $|S_\cap| \ge n-t$, $\Fc_\MPCT$ outputs $1$ to all parties, where $|S_\cap|=\cap_{i=1}^N S_i$. Else, it returns $0$.
+\end{itemize}
+\end{minipage}}
+\end{center}
+
+
+\paragraph{Protocol.}
+
+We introduce our multiparty Protocol \ref{pro:MPCT} (based on degree test protocol). In the following, $\Fc_\mathsf{Gen}$ be the ideal functionality defined in Section \ref{subsec:TPKE} and $\Fc_\mathsf{SDT}$ be the functionality defined in Section \ref{subsec:degtest}.
+
+\begin{algorithm}
+\caption{Private Cardinality Test for Multi-party $\mathsf{MPCT}$}
+\label{pro:MPCT}
+\begin{algorithmic}[1]
+\REQUIRE Values $\alpha_{1}, \dots, \alpha_{4t+2}\sample \FF$, threshold $t\in\NN$ and $N$ parties. Functionalities $\Fc_{\mathsf{Gen}}$ and $\Fc_\mathsf{SDT}$, and a IND-CPA TPKE $\mathsf{TPKE}=(\mathsf{Gen},\mathsf{Enc},\mathsf{Dec})$.
+
+\ENSURE Each party $P^i$ inputs a set $S_{i}=\{a_i^{(1)},\dots,a_i^{(n)}\} \in \FF^n$.
+
+\STATE Each party $\Ps_i$  sends  request $(\sid,\mathsf{request}_i)$ to $\Fc_{\mathsf{Gen}}$ and receives a secret key share $\sk_i$ and a public key $\pk$, which is known to every party involved in the protocol.
+\STATE Each party $\Ps_i$ encodes its set as a polynomial $P_i(x)=\prod_{j=1}^n (x-a_i^{(j)})$ and evaluates it on $4t+2$ points. That is, it computes $P_i(\alpha_{1}), \dots, P_i(\alpha_{4t+2})$. It encrypts the points, that is, $c_i^{(j)}\leftarrow \mathsf{Enc}(\pk,r_i\cdot P_i(\alpha_j))$ for a uniformly chosen $r_i\sample \FF$. Finally, it broadcasts $\{c_i^{(j)}\}_{j\in[4t+2]}$.
+\STATE Party $\Ps_1$ computes $d^{(j)}=(\sum_{i=1}^N c_i^{(j)})/P_1(\alpha_j)$ for each $j\in [4t+2]$. Then, sends $\{\alpha_i,d^{(j)}\}_{j}$ for every $j$, and $\sk_1$ to the ideal functionality $\Fc_{\mathsf{SDT}}$. Each party $\Ps_i$, for $i=2,\dots, N$, send $\sk_i$ to $\Fc_{\mathsf{SDT}}$ to check if the degree of the numerator (and the denominator) is at most $t$.
+
+\STATE Upon receiving $b\in\bin$ from the ideal functionality $\Fc_{\mathsf{SDT}}$, every party outputs $b$.
+\end{algorithmic}
+\end{algorithm}
+
+
+\paragraph{Analysis.} We now proceed to the analysis of the protocol described above. Note that $\Fc_\mathsf{SDT}$ has shared functionality $\Fc_\mathsf{Gen}$.
+\begin{lemma}\label{lem:randomize-set}
+Given $n$ characteristic polynomials with same degree from $\FF[x]$, denoted as $P_1(x),\dots,P_n(x)$,
+we argue that, for any $j$, $P'(x)=\sum_{i=1}^n r_i\cdot P_i(x)$ and $P_j(x)$ are relatively prime with probability $1-\negl[\log|\FF|]$ if $P_1(x),\dots,P_n(x)$ are mutually relatively prime, where $r_i\sample \FF$ is a uniformly random element.
+\end{lemma}
+\begin{proof}
+Supposing there is a common divisor of two polynomials $P'(x)$ and $P_j(x)$, since $P_j(x)$ is a characteristic polynomial, we denote $(x-s)$ the common divisor. Therefore, we have $P'(s)=0$ which can be represented as $\sum_{i=1}^n r_i\cdot P_i(s) = 0$. However, from the mutually relative primality of $P_1(x),\dots,P_n(x)$, we know that $P_i(s)$ cannot be zero simultaneously which means there exists at least one $i^*$ to make $P_{i^*}(s)\neq 0$. Moreover, $r_i$ are all sampled uniformly from $\FF$, the weighted sum of $r_i$ will not be zero with all but negligible probability. This is a contradiction. Therefore, $P'(x)$ and $P_j(x)$ will share a common divisor only with negligible probability.
+\end{proof}
+
+\begin{theorem}[Correctness]
+The protocol $\mathsf{MPCT}$ described above is correct.
+\end{theorem}{}
+\begin{proof}
+Note that the encryption $d^{(j)}$ computed by party $\Ps_1$ are equal to $$d^{(j)}=\mathsf{Enc}\left(\pk,\left(\sum_{i=1}^N r_i\cdot P_i(\alpha_j)\right)/P_1(\alpha_j)\right).$$ 
+Also, observe that 
+\begin{align*}
+\frac{\sum_{i=1}^N r_i\cdot P_i(\alpha_j)}{P_1(\alpha_j)}
+& =\frac{P_{\cap_i S_i}(\alpha_j)\cdot\sum_i^{N} r_i\cdot P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(\alpha_j)}{P_{\cap_i S_i}(\alpha_j)\cdot P_{S_1\setminus \left(\cap_{k\neq 1} S_k\right)}} \\ 
+& =\frac{\sum_i^{N} r_i\cdot P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(\alpha_j)}{ P_{S_1\setminus \left(\cap_{k\neq 1} S_k\right)}(\alpha_j)},
+\end{align*}{} 
+in this way, we make the numerator and denominator relatively prime except with negligible probability by Lemma \ref{lem:randomize-set}.
+
+Observe that $\deg \sum_i^{N} r_i\cdot P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(x) \leq t$  and $\deg P_{S_1\setminus \left(\cap_{k\neq 1} S_k\right)}(x)\leq t$ if and only if $S_\cap\geq n-t$. Hence, by the correctness of $\Fc_{\mathsf{SDT}}$, the protocol outputs $1$ if $S_\cap\geq n-t$, and $0$ otherwise.
+\end{proof}{}
+
+
+\begin{theorem}
+The protocol $\mathsf{MPCT}$ securely realizes functionality $\Fc_{\mathsf{MPCT}}$ in the $(\Fc_{\mathsf{Gen}},\Fc_{\mathsf{SDT}})$-hybrid model against any semi-honest adversaries corrupting up to $N-1$ parties, given that $\mathsf{TPKE}$ is IND-CPA.
+\end{theorem}{}
+
+\begin{proof}
+
+Assume that the adversary is corrupting $N-k$ parties in the protocol, for $k=1,\dots, N-1$. The simulator creates the secret keys and the public key of a threshold PKE in the setup phase while simulating $\Fc_\mathsf{Gen}$ and distributes the secret keys between every party. The simulator $\Sim$ takes the inputs (which are sets of size $n$, say $S_{i_1},\dots ,S_{i_{N-k}}$) of the corrupted parties and send them to the ideal functionality $\Fc_\mathsf{MPCT}$. It receives the output $b$ from the ideal functionality. If $b=0$, the simulator chooses $k$ uniformly chosen sets such that $|\cap_{i=1}^N S_i|< n-t$ and proceed the simulation as the honest parties would do. If $b=1$, , the simulator chooses $k$ uniformly chosen random sets such that $|\cap_{i=1}^N S_i|\geq n-t$ and proceed the simulation as the honest parties would do. Note that it can simulate the ideal functionality $\Fc_\mathsf{SDT}$ since it knows all the secret keys of the threshold PKE.
+
+Indistinguishability of executions follows immediately from the IND-CPA property of the underlying threshold PKE scheme.
+\end{proof}{}
+
+\paragraph{Communication Complexity.} When we instantiate the $\Fc_\mathsf{SDT}$ with the protocol from the previous section, each party broadcasts $\tilde \Oc(t^2)$. Hence, the total communication complexity is $\tilde \Oc(Nt^2)$, assuming a broadcast channel.
+
+
+\subsection{Multi-party Threshold Private Set Intersection Protocol}
+
+In this section, we extend Ghosh and Simkin protocol \cite{C:GhoSim19} to the multi-party setting using TPKE. We make use of the cardinality testing designed above to get the Protocol \ref{pro:MTPSI}.
+
+
+\begin{algorithm}
+\caption{Multi-Party Threshold  PSI $\mathsf{MTPSI}$}
+\label{pro:MTPSI}
+\begin{algorithmic}[1]
+\REQUIRE Given public parameters as follows: Values $\alpha_{1}, \dots, \alpha_{3t+1}\sample\FF$, threshold $t\in\NN$ and $N$ parties. Functionalities $\Fc_{\mathsf{Gen}}$ and $\Fc_{\mathsf{MPCT}}$, and a threshold additively PKE $\mathsf{TPKE}=(\mathsf{Gen},\mathsf{Enc},\mathsf{Dec})$.
+
+\ENSURE Each party $\Ps_i$ inputs a set $S_{i}=\{a_i^{(1)},\dots,a_i^{(n)}\} \in \FF^n$.
+
+\STATE Each party $\Ps_i$ sends its set $S_{i}$ to $\Fc_{\mathsf{MPCT}}$. If the functionality $\Fc_{\mathsf{MPCT}}$ outputs $0$, then every party $\Ps_i$ outputs $\perp$ and terminates the protocol.
+\STATE Each party $\Ps_i$  sends  request $(\sid,\mathsf{request}_i)$ to $\Fc_{\mathsf{Gen}}$ and receives a secret key share $\sk_i$ and a public key $\pk$, which is known to every party involved in the protocol. 
+\FORALL{ Party $\Ps_i$}
+    \STATE It encodes its set as a polynomial $P_i(x)=\prod_{j=1}^n (x-a_i^{(j)})$ and evaluates it on $3t+1$ points. That is, it computes $P_i(\alpha_{1}), \dots, P_i(\alpha_{3t+1})$.
+    \STATE It samples $R_i(x)\sample \FF[x]$ such that $\deg R_i(x)=t$.
+    \STATE It encrypts these points using $\pk$, that is, it computes $c_i^{(j)}=\mathsf{Enc}(\pk,R_i(\alpha_j)\cdot P_i(\alpha_{j}))$ for every $j\in [3t+1]$.
+    \STATE It broadcasts $\{c_i^{(j)}\}_{j\in [3t+1]}$.
+\ENDFOR
+\STATE Party $\Ps_1$ adds the ciphertexts to get $d^{(j)}=\sum_{i}^{N} c_i^{(j)}$ for each $j\in [3t+1]$. It broadcasts $\{d^{(j)}\}_{j\in [3t+1]}$.
+\STATE They mutually decrypt $\{d^{(j)}\}_{j\in [3t+1]}$ to learn $V^{(j)}\leftarrow \mathsf{Dec}(\sk,d_{N}^{(j)})$ for $j\in [3t+1]$.
+
+\STATE $\Ps_1$ computes the points $\tilde{V}^ {(j)}=V^{(j)}/P_1(\alpha_j)$ for $j\in [3t+1]$.
+\STATE $\Ps_1$ interpolates a rational function using the pairs of points $(\alpha_j,\tilde{V}^ {(j)})$. 
+\STATE $\Ps_1$ recovers the polynomial $P_{S_1\setminus (\cap_{i} S_i)}(x)$ in the denominator.
+\STATE $\Ps_1$ evaluates $P_{S_1\setminus \cap_{i} S_i}(x)$ on every point of its set  $\{a_1^{(1)},\dots,a_1^{(n)}\}$ to compute $\cap_i S_i$. That is, whenever $P_{S_1\setminus \cap_{i} S_i}(a_1^{j})\neq 0$, then $a_1^{j}\in \cap_i S_i$.
+\STATE It broadcasts the output $\cap_i S_i$.
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Analysis.} We now proceed to the analysis of the protocol described above. We start by analyzing the correctness of the protocol and then its security.
+
+\begin{theorem}[Correctness]
+\label{theor:MPPSIcorrect}
+The protocol $\mathsf{MTPSI}$ is correct.
+\end{theorem}{}
+\begin{proof}
+Assume that $|S_1\setminus \left(\cap_{i=2}^N S_i\right)|\leq t$ (note that this condition is guaranteed after resorting to the functionality $\Fc_{\mathsf{MPCT}}$ in the first step of the protocol). After the execution of the protocol, party $\Ps_1$ obtains the points $V^{(j)}=\sum_i^{N} P_i(\alpha_j)\cdot R_i(\alpha_j)$. Then, \begin{align*}
+    \tilde{V}^ {(j)} & =\frac{V^{(j)}}{P_1(\alpha_j)} =\frac{\sum_i^{N} P_i(\alpha_j)\cdot R_i(\alpha_j)}{P_1(\alpha_j)} \\
+     &=\frac{P_{\cap_i S_i}(\alpha_j)\cdot\sum_i^{N} P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(\alpha_j)\cdot R_i(\alpha_j)}{P_{\cap_i S_i}(\alpha_j)\cdot P_{S_1\setminus \left(\cap_{k\neq 1} S_k\right)}(\alpha_j)}  \\
+      &=\frac{\sum_i^{N} P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(\alpha_j)\cdot R_i(\alpha_j)}{ P_{S_1\setminus \left(\cap_{k\neq 1} S_k\right)}(\alpha_j)}  .
+\end{align*}{}
+
+Since $\Ps_1$ has $3t+1$ evaluated points of the rational function above, then it can interpolate a rational function to recover the polynomial $P_{S_1\setminus \left(\cap_{k\neq 1} S_k\right)}$. This is possible because of Lemma \ref{lem:minsky} and the fact that $$\deg \left(\sum_i^{N} P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(\alpha_j)\cdot R_i(\alpha_j) \right)\leq 2t \quad \text{ and } \quad \deg\left( P_{S_1\setminus \left(\cap_{k\neq 1} S_k\right)}(\alpha_j)\right)\leq t.$$ 
+
+Having computed the polynomial $P_{S_1\setminus \left(\cap_{k\neq 1} S_k\right)}$, party $\Ps_1$ can compute the intersection because the roots of this polynomial are exactly the elements in $S_1\setminus \left(\cap_{k\neq 1} S_k\right)$.
+\end{proof}{}
+
+\begin{theorem}
+The protocol $\mathsf{MTPSI}$ securely realizes functionality $\Fc_{\mathsf{MTPSI}}$ in the $(\Fc_{\mathsf{Gen}},\Fc_{\mathsf{MPCT}})$-hybrid model against any semi-honest adversary corrupting up to $N-1$ parties.
+\end{theorem}{}
+\begin{proof}
+Let $\Ac$ be an adversary corrupting up to $k$ parties involved in the protocol, for any $k\in[N-1]$. Let $\Ps_{i_1}, \dots , \Ps_{i_{k}}$ be the corrupted parties. The simulator $\Sim$ works as follows:
+\begin{enumerate}
+    \item It sends the inputs of the corrupted parties, $S_{i_1},\dots, S_{i_k}$, to the ideal functionality $\Fc_{\mathsf{MTPSI}}$. $\Sim$ either receives $\perp$ or $\cap_i S_i$ from the ideal functionality $\Fc_{\mathsf{MTPSI}}$.
+    \item $\Sim$ waits for $\Ac$ to send the corrupted parties' inputs to the ideal functionality $\Fc_{\mathsf{MPCT}}$. If $\Sim$ has received $\perp$ from $\Fc_{\mathsf{MPCT}}$, then $\Sim$ leaks $0$ to $\Ac$ (and $\mathcal{Z}$) and terminates the protocol. Else, $\Sim$ leaks $1$ and continues.
+    \item $\Sim$ waits for $\Ac$ to send a request $(\sid,\mathsf{request}_{i_j})$ for each of the corrupted parties (that is, for $j\in[k]$) to $\Fc_\mathsf{Gen}$. Upon receiving such requests, $\Sim$ generates $(\pk,\sk_{1},\dots, \sk_N)\leftarrow \mathsf{Gen}(1^\lambda,N)$ and returns $(\pk,\sk_{i_j})$ for each of the requests.
+    \item For each party $\Ps_{\ell}$ such that $\ell\neq i_j$ (where $j\in [k]$), $\Sim$ picks a random polynomial $U_\ell(x)$ of degree $n-|\cap_i S_i|+t$ and sends $\mathsf{Enc}(\pk,R_\ell(\alpha_j)\cdot P_{\cap_i S_i}(\alpha_j) \cdot U_\ell(\alpha_j))$, where $R_\ell(x)$ is chosen uniformly at random such that $\deg R_\ell(x)=t$. From now on, $\Sim$ simulates the dummy parties as in the protocol.
+\end{enumerate}{}
+
+We now argue that both the simulation and the real-world scheme are indistinguishable from the point-of-view of any environment $\mathcal{Z}$. In the real-world scheme, party $\Ps_1$ obtains the polynomial $$V(x)=P_{\cap_i S_i}(x)\cdot\sum_i^{N} P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(x)\cdot R_i(x)$$ evaluated in $3t+1$ points. Assume that $\Ps_1$ is corrupted by $\Ac$. Even in this case, there is an  index $\ell$ for which $\Ac$ does not know the polynomial $R_\ell(x)$. More precisely, we have that $$V(x)=P_{\cap_i S_i}(x)\cdot\left( \left(\sum_{i\neq \ell} P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(x)\cdot R_i(x)\right) + P_{S_\ell\setminus \left(\cap_{k\neq \ell} S_k\right)}(x)\cdot R_\ell(x)\right).$$ First, note that \begin{align*}\deg \left(\sum_{i\neq \ell} P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}(x)\cdot R_i(x)\right) &= \deg P_{S_\ell\setminus \left(\cap_{k\neq \ell} S_k\right)}(x)\cdot R_\ell(x)\\
+&=n-|\cap_i S_i|+t\leq 2t.\end{align*} Moreover, we have for any $i\in [N]$ that $\deg P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}\leq t$, $\deg R_i(x)=t$ and $\gcd\left(P_{S_i\setminus \left(\cap_{k\neq i} S_k\right)}, P_{S_j\setminus \left(\cap_{k\neq j} S_k\right)}\right)=1$ for any $j\neq i$. Hence, by Lemma \ref{lemma:randomPoly}, we can build a sequence of  hybrids where we replace  $V(x)$ by the polynomial $V'(x)=P_{\cap_i S_i}(x)\cdot U(x)$, where $\deg U(x)=n-|\cap_i S_i|+t$, as in the ideal-world execution. 
+Indistinguishability of executions follows.
+\end{proof}{}
+
+
+\paragraph{Communication complexity.} 
+When we instantiate the ideal functionality $\Fc_{\mathsf{MPCT}}$ with the protocol from the previous section the scheme has communication complexity $\tilde \Oc(Nt^2)$.

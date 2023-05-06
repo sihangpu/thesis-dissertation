@@ -1,0 +1,318 @@
+%!TEX root = ../dissertation.tex
+\chapter{Additional Constructions}
+\label{AppendixA}
+
+\section{Threshold PSI: Oblivious Linear Algebra}
+\label{sec:oblLinearAlg}
+
+\subsection{Oblivious Matrix Multiplication}
+ \label{appen:OMM}
+ 
+\paragraph{Protocol.} The following Protocol \ref{pro:secMult} allows several parties to jointly compute the (encrypted) product of two encrypted matrices. Note that the protocol can also be used to compute the encryption of the product of two encrypted values in $\FF$.
+
+
+\begin{algorithm}
+\caption{Secure Multiplication $\mathsf{secMult}$}
+\label{pro:secMult}
+\begin{algorithmic}[1]
+\REQUIRE Each party $\Ps_i$ has a secret share $\sk_i$ of a secret key for a public key $\pk$ of a TPKE scheme $\mathsf{TPKE}=(\mathsf{Gen},\enc,\dec)$.
+
+\ENSURE Party $\Ps_1$ inputs $\enc(\pk,\Mn_l)$ and $ \enc(\pk,\Mn_r)$, where $\Mn_l,\Mn_r\in\FF^{t\times t}$.\\
+
+\textbf{Goal: } Every one knows the product $\enc(\Mn_l\cdot\Mn_r)$.
+\FORALL{party $\Ps_i$}
+    \STATE It samples two random matrices $\Rn_l^{(i)},\Rn_r^{(i)}\sample \FF^{t\times t}$.
+    \STATE It computes $c_l^{(i)}=\enc(\pk, \Rn^{(i)}_l)$, $c_l^{(i)}=\enc(\pk,\Rn^{(i)}_r)$, $ d_{r}^{(i)}=\enc(\pk,\Mn_l\cdot\Rn^{(i)}_r)$,  $d_l^{(i)}=\enc(\pk,\Rn^{(i)}_l\cdot\Mn_r)$.
+    \STATE It broadcasts $\{c_l^{(i)},c_r^{(i)},d_l^{(i)},d_r^{(i)}\}$.
+\ENDFOR
+ \STATE Each party $\Ps_i$ computes $\tilde c^{(i)}=\enc(\pk,\sum_{j\neq i} \Rn^{(i)}_l\cdot \Rn^{(j)}_r)$ (using $c_r^{(j)}$ and $\Rn^{(i)}_l$) and broadcasts $\tilde c^{(i)}$.
+\STATE All parties mutually decrypt i) $\enc(\Mn_l'):=\enc(\pk,\Mn_l)+\sum_j c_l^{(j)} $ (to obtain $\Mn_l'\in\FF^{t\times t}$), ii) $\enc(\Mn_r'):=\enc(\pk,\Mn_r)+\sum_j c_r^{(j)}$ (to obtain $\Mn_r'\in\FF^{t\times t}$)
+\FORALL{party $\Ps_i$}
+\STATE It  computes $\tilde d = \enc(\pk,\Mn_l'\cdot \Mn_r')$.
+\STATE It outputs $e=\tilde d-\sum_j d_{l}^{(j)}-\sum_j d_{r}^{(j)} -\sum_j \tilde c^{(j)}$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+  \paragraph{Analysis.} We proceed to the analysis of the protocol described above.
+  
+  \begin{lemma}[Correctness]
+    The protocol $\mathsf{secMult}$ is correct.
+  \end{lemma}{}
+  \begin{proof}
+  The correctness is straightforward.
+  \end{proof}
+  
+  \begin{lemma}[Security]
+    The protocol $\mathsf{secMult}$ securely EUC-realizes $\Fc_{\mathsf{OMM}}$  with shared ideal functionality $\Fc_\mathsf{Gen}$ against semi-honest adversaries  corrupting up to $N-1$ parties, given that $\mathsf{TPKE}$ is IND-CPA.
+  \end{lemma}{}
+  \begin{proof}[Proof (Sketch)]
+    Assume that the adversary corrupts $N-k$ parties. The simulator takes the inputs from these parties and send them to the ideal functionality. Upon receiving the encrypted value $\enc(\pk,\Mn_l\cdot \Mn_r)$, it simulates the protocol as the honest parties would do.
+    
+    We now prove that no set of at most $N-1$ colluding parties can extract information about $\Mn_l,\Mn_r$. First, observe that any set of $N-1$ parties cannot extract any information about encrypted values that are not decrypted during the protocol (because there is always a missing secret key share) given that $\mathsf{TPKE}$ is IND-CPA. Second, we analyze the matrix  $\Mn_l'$ (which is decrypted during the protocol). We have that $\Mn_l'=\Mn_l+\sum_j \Rn_l^{(j)}$. Hence, there is always at least one matrix $\Rn_l^{(\ell)}$ which is unknown to the adversary and that perfectly hides the matrix $\Mn_l$ (the same happens $\Mn_r'$.
+  \end{proof}{}
+  
+ 
+\paragraph{Complexity.} The communication complexity of the protocol is dominated by the messages carrying the (encrypted) matrix. Hence, assuming a broadcast channel between the parties, the protocol has communication complexity of $\Oc(Nt^2)$ where $t$ is the size of the input matrices and $N$ the number of parties involved in the protocol.
+ 
+ 
+ 
+ \subsection{Compute the Rank of a Matrix}
+ \label{sec:secRank}
+
+
+\paragraph{Protocol.} We now present the Protocol \ref{pro:secRank} to compute the rank of an encrypted matrix.
+  
+  
+ \begin{algorithm}
+\caption{Secure Rank $\mathsf{secRank}$}
+\label{pro:secRank}
+\begin{algorithmic}[1]
+\REQUIRE Each party has a secret key share $\sk_i$ for a public key $\pk$ of a TPKE $\mathsf{TPKE}=(\mathsf{Gen},\enc,\dec)$. The parties have access to the oblivious matrix multiplication ideal functionality $\Fc_\mathsf{OMM}$.
+
+\ENSURE Party $\Ps_1$ inputs $\enc(\pk,\Mn)$ where $\Mn\in\FF^{t\times t}$.
+
+\STATE Each party $\Ps_i$ broadcasts an encrypted uniformly chosen at random unit upper and lower triangular Toeplitz matrices $\enc(\pk,\Un_i)$ and $\enc(\pk,\Ln_i)$ and a uniformly chosen at random diagonal matrix $\enc(\pk,\Xn_i)$, where $\Un_i,\Ln_i\in\FF^{t\times t}$ and $\Xn_i\in\FF^{t\times t}$.
+
+\STATE  Each party $\Ps_i$ computes: i) $\enc(\pk,\Xn)=\sum_i\enc(\pk,\Xn_i)$, ii) $\enc(\pk,\Un)=\enc(\pk,(\sum_i\Un_i)-(N-1)\In)$, and iii) $\enc(\pk,\Ln)=\enc(\pk,(\sum_i\Ln_i)- (N-1)\In)$, where $\In$ is the identity matrix.
+
+\STATE All parties mutually compute $\enc(\pk,\Nn)=\enc(\pk,\Xn\Un\Mn\Ln)$ via three invocations of $\Fc_\mathsf{OMM}$.
+
+\STATE Each party $\Ps_i$ samples $\un_i,\vn_i\sample \FF^t$ and broadcasts $\enc(\pk,\un_i),\enc(\pk,\vn_i)$.
+
+\STATE Each party $\Ps_i$ computes $\enc(\pk,\un)=\sum_j\enc(\pk,\un_j)$ and $\enc(\pk,\vn)=\sum_j\enc(\pk,\vn_j)$. Then, it computes the sequence $\enc(\mathfrak{a})$ with $2\log t$ invocations of $\Fc_\mathsf{OMM}$,\footnotemark where $\mathfrak{a}=\{\an_0,\dots, \an_{2t-1}\}$ and $\enc(\pk,\an_j) = \enc(\pk,\un\Nn^j\vn)$ for $0\le j\le 2t-1$.
+
+\STATE All parties mutually compute $\enc(\pk,r-1)$ where $r$ is the degree of $m_{\mathfrak{a}}$, the minimal polynomial of the (encrypted) sequence $\enc(\mathfrak{a})$. This can be calculated using a Boolean circuit with size $O(t^2k\log t)$ (which can be securely constructed from TPKE \cite{EC:SchTuy06}).
+\end{algorithmic}
+\end{algorithm}
+
+\footnotetext{We can perform $t$ multiplications in $\Oc(\log t)$ calls to $\Fc_\mathsf{OMM}$ by performing multiplications in a batched fashion \cite{TCC:KMWF07}. }
+
+  \paragraph{Analysis.} We analyze the correctness and security of the protocol.
+  \begin{lemma}[Correctness]
+    The protocol $\mathsf{secRank}$ is correct.
+  \end{lemma}{}
+  \begin{proof}
+    The correctness of the protocol is guaranteed by Lemma \ref{lem:rank-1} and Lemma \ref{lem:rank-2}.
+  \end{proof}{}
+  
+  \begin{lemma}[Security]
+    The protocol $\mathsf{secRank}$ securely EUC-realizes $\Fc_\mathsf{ORank}$  with shared ideal functionality $\Fc_\mathsf{Gen}$ in the $\Fc_\mathsf{OMM}$-hybrid model against semi-honest adversaries corrupting up to $N-1$ parties, given that $\mathsf{TPKE}$ is IND-CPA.
+  \end{lemma}{}
+  \begin{proof}[Proof (Sketch)]
+    The simulator takes the corrupted parties input, sends them to the ideal functionality and simulates the protocol as the honest parties would do. It is easy to see that, even when the adversary corrupts $N-1$ parties, the information is hidden by the TPKE and thus no information on $\Mn$ is leaked to the adversary by the IND-CPA of the underlying TPKE.
+  \end{proof}{}
+  
+  \paragraph{Complexity.} Each party broadcasts $\Oc(t^2k\log t)$ bits of information, where $k=\log | \FF|$. To see this, note that the communication of the protocol is  dominated by the computation of the  circuit that computes the degree of $\mathfrak{a}$ and this can be implemented with communication cost of $\Oc(t^2k\log t)$ \cite{TCC:KMWF07}. Assuming a broadcast channel, the communication complexity is $\tilde \Oc(Nt^2)$
+  
+\subsection{Invert a Matrix}
+\label{subsec:invertmatrix}
+  In this section, we present and analyze a protocol that allows $N$ parties to invert an encrypted matrix. In this setting, each of the $N$ parties holds a secret share of a public key $\pk$ of a TPKE. Given an encrypted matrix, they want to compute an encryption of the inverse of this matrix.
+  
+  \paragraph{Ideal Functionality.} The ideal functionality of oblivious rank computation is defined below. 
+ \begin{center}
+\fbox{\begin{minipage}{30em}
+\begin{center}
+\textbf{$\Fc_{\mathsf{OInv}}$ functionality}
+\end{center}
+\paragraph{Parameters:} $\sid, N,q,t\in\NN$ and $\FF$, where $\FF$ is a field of order $q$, known to the $N$ parties involved in the protocol. $\pk$ public-key of a threshold PKE scheme.
+\begin{itemize}
+\item Upon receiving $(\sid,\Ps_1,\enc(\pk,\Mn))$ from party $\Ps_1$ (where $\Mn\in\FF^{t\times t}$ is a non-singular matrix), $\Fc_{\mathsf{ORank}}$ outputs $\enc(\pk, \Mn^{-1})$ to $\Ps_1$ and $(\enc(\pk,\Mn),\enc(\pk,\Mn^{-1}))$ to all other parties $\Ps_i$, for $i=2,\dots ,N$.
+\end{itemize}
+\end{minipage}}
+\end{center}
+
+\paragraph{Protocol.} We now describe the Protocol \ref{pro:secInv} that allows $N$ parties to jointly compute the encryption of the inverse of a matrix, given that this matrix is non-singular.
+  
+ 
+  
+\begin{algorithm}
+\caption{Secure Matrix Invert $\mathsf{secInv}$}
+\label{pro:secInv}
+\begin{algorithmic}[1]
+\REQUIRE Each party has a secret key share $\sk_i$ for a public key $\pk$ of a TPKE $\mathsf{TPKE}=(\mathsf{Gen},\enc,\dec)$.
+
+\ENSURE Party $\Ps_1$ inputs $\enc(\pk,\Mn)$ where $\Mn\in\FF^{t\times t}$ is a non-singular matrix.
+
+\STATE  Each party $\Ps_i$ samples a non-singular matrix $\Rn_i\sample\FF^{t\times t}$.
+\STATE  Set $\enc(\pk,\Mn'):=\enc(\pk,\Mn)$.
+\FOR{$ i $ from $1$ to $N$}
+    \STATE $\Ps_i$ calculates $\enc(\pk,\Mn')=\enc(\pk,\Rn_i\Mn')$
+    \STATE $\Ps_i$ broadcasts $\enc(\pk,\Mn').$ %to $\Ps_{i+1}$ if $i<N$.
+\ENDFOR
+\STATE All parties mutually decrypt the final $\enc(\pk,\Mn')$. Then they compute its inverse to obtain $\enc(\pk,\Nn')=\enc(\pk,\Mn'^{-1}\prod_i\Rn_i^{-1})$.
+\FOR{$i$ from $N$ to $1$}
+    \STATE $\Ps_i$ computes $\enc(\pk,\Nn')=\enc(\pk,\Nn'\Rn_i^{-1})$. 
+    \STATE $\Ps_i$ broadcasts $\enc(\pk,\Nn')$ %to $P_{i-1}$ if $i>1$; otherwise broadcasts $\enc(M^{-1}):=\enc(N')$.
+\ENDFOR
+\STATE Finally, $\Ps_1$ outputs $\enc(\pk,\Mn^{-1})=\enc(\pk,\Nn')$.
+\end{algorithmic}
+\end{algorithm}
+  
+  \paragraph{Analysis.} The proofs of the following lemmas follow the same lines as the proofs in the analysis of $\mathsf{secMult}$ protocol. We state the lemmas but omit the proofs for briefness.
+  
+  \begin{lemma}
+    The protocol $\mathsf{secInv}$ is correct.
+  \end{lemma}{}
+  \begin{lemma}
+    The protocol $\mathsf{secInv}$ securely EUC-realizes $\Fc_\mathsf{OInv}$  with shared ideal functionality $\Fc_\mathsf{Gen}$ against semi-honest adversaries corrupting up to $N-1$ parties, given that $\mathsf{TPKE}$ is IND-CPA.
+  \end{lemma}{}
+  
+  \paragraph{Complexity.} Each party broadcasts $\Oc(t^2)$ bits of information. The communication complexity of the protocol is $\Oc(Nt^2)$, assuming a broadcast channel.
+  
+  
+\subsection{Secure Unary Representation}
+\label{subsec:SUR}
+Following \cite{TCC:KMWF07}, we present a protocol that allows to securely compute the unary representation of  a matrix.
+ 
+ 
+ \paragraph{Ideal Functionality.} The ideal functionality for Secure Unary Representation is given below.
+  \begin{center}
+ \fbox{\begin{minipage}{30em}
+\begin{center}
+\textbf{$\Fc_{\mathsf{SUR}}$ functionality}
+\end{center}
+\paragraph{Parameters:} $\sid, N,q,t\in\NN$ and $\FF$, where $\FF$ is a field of order $q$, known to the $N$ parties involved in the protocol. $\pk$ public-key of a threshold PKE scheme.
+\begin{itemize}
+\item Upon receiving $(\sid,\Ps_1,\enc(\pk,r))$ from party $\Ps_1$ (where $r\in\FF$ and $r\leq t$), $\Fc_{\mathsf{SUR}}$ computes $(\enc(\pk,\delta_1),\dots,\enc(\pk,\delta_t))$ such that $\delta_i = 1$ if $i\le r$, and $\delta_i = 0$ otherwise. The functionality outputs $(\enc(\pk,\delta_1),\dots,\enc(\pk,\delta_t))$ to $\Ps_1$ and $(\enc(\pk,r),(\enc(\pk,\delta_1),\dots,\enc(\pk,\delta_t)))$ to all other parties $\Ps_i$, for $i=2,\dots ,N$.
+\end{itemize}
+\end{minipage}}
+\end{center}
+ 
+  \paragraph{Protocol.} A protocol for secure unary representation can be implemented with the help of a binary-conversion protocol \cite{EC:SchTuy06}. That is, given $\enc(\pk,r)$, all parties jointly compute $\enc(\pk,\delta_i)$, where $\delta_i=1$, if $i\leq r$, and $\delta_i=0$ otherwise, via a Boolean circuit (which can be securely implemented based on Paillier cryptosystem).
+
+
+ 
+
+\paragraph{Communication complexity.} We can calculate the result using a Boolean circuit of size $O(r\log t)$, thus the communication complexity is $O(Nr\log t)$.
+ 
+ 
+ 
+ \subsection{Solve a Linear System}
+ \label{sec:secLS}
+
+
+
+\paragraph{Protocol.} We now present the Protocol \ref{pro:secLS} that allows multiple parties to solve an encrypted linear system. In the following, we assume that the system has at least one solution (note that this can be guaranteed using the $\mathsf{secRank}$ protocol). 
+
+\begin{algorithm}
+\caption{Secure Linear Solve $\mathsf{secLS}$}
+\label{pro:secLS}
+\begin{algorithmic}[1]
+\REQUIRE Each party has a secret key share $\sk_i$ for a public key $\pk$ of a TPKE $\mathsf{TPKE}=(\mathsf{Gen},\enc,\dec)$. The parties have access to the  ideal functionalities $\Fc_\mathsf{ORank}$, $\Fc_\mathsf{OInv}$ and $\Fc_\mathsf{SUR}$.
+
+\ENSURE Party $\Ps_1$ inputs $\enc(\pk,\Mn)$ where $\Mn\in\FF^{t\times t}$ is a non-singular matrix.
+
+\STATE All parties jointly compute an encryption of the  rank $\enc(\pk,r)$ of $\Mn$ via the ideal functionality $\Fc_\mathsf{ORank}$.% $:=\mathsf{secRank}(\enc(M))$. 
+\STATE Set $\enc(\pk,\Mn'):=\enc(\pk,\Mn)$ and $\enc(\pk,\yn'):=\enc(\pk,\yn)$.
+\FOR{$i$ from $1$ to $N$}
+    \STATE $\Ps_i$ samples two non-singular matrices $\Rn_i,\Qn_i$ from $\FF^{t\times t}$. It calculates $\enc(\pk,\Mn')=\enc(\pk,\Rn_i\Mn' \Qn_i)$ and $\enc(\pk,\yn')=\enc(\pk,\Rn_i\yn')$.  $\Ps_i$ broadcasts $\enc(\pk,\Mn'),\enc(\pk,\yn')$. %to $P_{i+1}$ if $i<N$; otherwise broadcasts $\enc(M'),\enc(\vec{y'})$.
+\ENDFOR
+\STATE All the parties jointly compute  $\enc(\delta_1),\dots,\enc(\delta_t)$ by invoking $\Fc_\mathsf{SUR}$ on input $\enc(\pk,r)$. They set $\enc(\pk,\Delta) := \enc\left(\pk,\begin{bmatrix}
+                                    \delta_1&\dots&0\\
+                                    \vdots&\ddots&\vdots\\
+                                    0&\dots&\delta_t
+                                \end{bmatrix}\right)$.
+     Finally, they compute $\enc(\pk,\Nn):=\enc(\pk,\Mn'\cdot \Delta+\In_t-\Delta)$, where $\In_t\in\FF^{t\times t}$ is the identity matrix.
+\STATE All the parties jointly compute $\enc(\Nn^{-1})$ by invoking $\Fc_\mathsf{OInv}$ on input $\enc(\pk,\Nn)$.
+\STATE Each party $\Ps^i$ samples $\un_i\sample \FF^t$ and broadcasts $(\enc(\pk,\Mn'\un_i), \enc(\pk,\un_i))$.
+     
+\STATE All parties jointly compute $\enc(\pk,\un')=\enc(\pk,\Nn^{-1}\yn'_r)$ by invoking $\Fc_\mathsf{OMM}$, where $\enc(\pk,\yn'_r) = \enc(\pk,(\yn'+\sum_j \Mn'\un_j)\Delta)$. Then they set $\enc(\pk,\xn)=\enc(\pk,(\sum_j\un_j)-\un')$.
+\FOR{$i$ from $N$ to $1$}
+    \STATE $\Ps_i$ calculates $\enc(\pk,\xn)=\enc(\pk,\Qn_i^{-1}\xn)$. $\Ps_i$ broadcasts $\enc(\pk,\xn)$.
+\ENDFOR
+\STATE $\Ps_1$ outputs $\enc(\pk,\xn)$.
+\end{algorithmic}
+\end{algorithm}
+ 
+ 
+ \begin{lemma}[Correctness]
+ The protocol $\mathsf{secLS}$ is correct.
+ \end{lemma}{}
+ \begin{proof}
+   The proof follows directly from \cite{KaltofenSaunders91,TCC:KMWF07}.
+ \end{proof}{}
+ 
+ \begin{lemma}
+   The protocol $\mathsf{secLS}$ securely EUC-realizes $\Fc_\mathsf{OLS}$  with shared ideal functionality $\Fc_\mathsf{Gen}$ in the $(\Fc_\mathsf{ORank},\Fc_\mathsf{OInv},\Fc_\mathsf{SUR})$-hybrid model against semi-honest adversaries corrupting up to $N-1$ parties, given that $\mathsf{TPKE}$ is IND-CPA.
+ \end{lemma}{}
+
+  \paragraph{Communication complexity.} Each party broadcasts $\Oc(t^2k\log t)$ bits of information where $k=|\FF|$. The total communication complexity is $\tilde \Oc(t^2)$.
+
+
+\section{Stealth Signature: Group-based Construction against Bounded Leakage}
+\label{sec:group-bounded}
+We provide an $\SS$ which is unforgeable and unlinkable with \emph{bounded} key-exposure. The construction is shown in~\cref{fig:ss-group}, where $\GG$ is a group of primer order $p$, $g$ is a generator, and $\hash$ is a random oracle mapping from $\GG$ to $\ZZ_p$. Additionally, $\DS$ is an efficient group-based signature scheme such as ECDSA, Schnorr and others whose verification key and signing key has discrete logarithm relation, i.e., $\vk=g^\sk$.
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+    \begin{pcvstack}
+    \procedure[space=keep,codesize=\scriptsize]{$\mkgen(\secpar)$}{
+        \text{Sample } \GG=\langle g\rangle\\
+        (x_0, x_1,\dots,x_n)\sample\ZZ_p\\
+        \mpk := (g,h_0:=g^{x_0},\dots,h_n:=g^{x_n})\\
+        \msk := (x_0,\dots,x_n)\\
+        \mtk := x_0\\
+        \pcreturn \mpk,\msk,\mtk
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\oskgen(\msk,\opk,\tki)$}{
+        \pcparse (x_0,\dots,x_n) := \msk\\
+        \pcparse (R, R_0) := \tki\\
+        \pcreturn \perp \pcif\\ \false\gets\track(x_0,,\opk,\tki)\\
+        \osk := \sum_{i=1}^n x_i\cdot\hash(R^{x_i})\\
+        \pcreturn \osk
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\verify(\opk,\sigma, m)$}{
+        \pcreturn \DS.\verify(\opk, \sigma, m) 
+    }
+    \end{pcvstack}
+    \pchspace
+    \begin{pcvstack}
+    \procedure[space=keep,codesize=\scriptsize]{$\opkgen(\mpk)$}{
+        \pcparse (g,h_0,\dots,h_n) := \mpk\\
+        r\sample\ZZ_p\\
+        \opk := \prod_{i=1}^n h_i^{\hash(h_i^r)}\\
+        \tki := (R:=g^r, R_0:=\opk^{\hash(h_0^r)}\\
+        \pcreturn \opk,\tki
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\sign(\osk,m)$}{
+        \pcreturn \sigma:=\DS.\sign(\osk, m)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\track(\mtk,\opk,\tki)$}{
+        \pcparse (R,R_0) := \tki\\
+        \pcparse x_0 := \mtk\\
+        \pcreturn \opk^{\hash(R^{x_0})}\eqornot R_0
+    }
+    \end{pcvstack}
+    \end{pchstack}
+\caption{Construction of group-based SS secure with $(n-1)$-bounded key-exposure}
+\label{fig:ss-group}
+\end{figure}
+
+\smallskip\noindent\textbf{Correctness.}
+It is clear that $\opk=g^\osk$ as
+$$\opk=\prod_{i=1}^n h_i^{\hash(h_i^r)}=g^{\sum_{i=1}^n x_i\cdot\hash(g^{r\cdot x_i})}=g^\osk.
+$$
+The tracking mechanism also works since
+$$R_0=\opk^{\hash(h_0^r)}=\opk^{\hash(g^{r\cdot x_0})}.
+$$
+
+\smallskip\noindent\textbf{Security Analysis.} Now we analyze the security of above construction.
+\begin{theorem}
+The construction in~\cref{fig:ss-group} is (strongly) unforgeable and unlinkable with \emph{$(n-1)$-bounded} key exposures.
+\end{theorem}
+\begin{proof}(sketch)
+For unlinkability, without knowing $x_i$ or $r$, by DDH assumption, the triple $g^r,g^{x_i},g^{r\cdot x_i}$ remains uniformly random over $\GG$. With random oracle $\hash$, $\hash(g^{r\cdot x_i})$ is also uniformly random over $\ZZ_p$. Therefore, it is clear that $\opk,R,R_0$ are uniformly random.
+
+For unforgeability, as long as $\DS$ is (strongly) unforgeable, then $\SS$ is also (strongly) unforgeable.
+
+Now we consider key-exposures. Since
+$$\osk=\sum_{i=1}^n x_i\cdot \hash(h_i^r),
+$$
+this is an equation with $n$ variables ($x_i$) for adversaries. If the adversary learns at most $n-1$ equations, then this linear system is undetermined and has at least $p$ solutions which is exponentially large. Thus $\msk$ is hiding when there are at most $(n-1)$ key-exposures.
+\end{proof}
+  

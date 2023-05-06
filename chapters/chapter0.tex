@@ -1,0 +1,749 @@
+%!TEX root = ../dissertation.tex
+
+\chapter{Preliminary}
+\label{sec:prelim}
+\newthought{In this preliminary chapter}, we lay the groundwork for our exploration by introducing essential concepts, setting the stage for a comprehensive understanding of the subject matter as we delve into the subsequent chapters.
+
+We denote by $\lambda \in\mathbb{N}$ the security parameter, by $\poly[\lambda]$ any function that is bounded by a polynomial in $\secpar$, and by $\negl[\lambda]$ any
+function that is negligible in the security parameter. We abbreviate the computational indistinguishability of two distributions by $\approx_c$. The set of $N$ elements is always written as $[N]$. We also denote as $\Dc^\Oc$ a distinguisher $\Dc$ access to an oracle $\Oc$ via classical queries and $\Ac^{|\Oc\rangle}$ via quantum queries. 
+If $S$ is a finite set, then  $x\sample S$  denotes an element $x$ sampled from $S$ according to a uniform distribution and $|S|$ denotes the cardinality of $S$.
+For two vectors $\un,\vn\in\FF^n$ over a finite field $\FF$, we denote by $\un\odot \vn$ their component-wise multiplication. We denote by $\mathsf{Supp}(\un)$ the support of $\un$, that is, the set of indices where $\un$ is different from $0$.\footnote{If there is only one index different from zero, $\mathsf{Supp}(\un)$ denotes this index.} For $S\subseteq [n]$, $\un_S$ denotes the vector $(\un_i)_{i\in S}$. Finally, $\un^T$ denotes the transpose of $\un$ and $\mathsf{hw}(\un)$ denotes the hamming weight of $\un$ (that is, the number of coordinates of $\un$ different from $0$).
+
+
+\begin{definition}[Statistical Distance]
+The statistical distance between two probability distributions $A$ and $B$ is 
+$$\sd(A,B)=\frac{1}{2}\sum_v\big|\prob{A=v}-\prob{B=v}\big|.
+$$
+\end{definition}
+
+Recall min-entropy of a random variable $A$ is 
+$$H_\infty(A):=-\log(\max_a \prob{A=a}),$$
+then we have the following lemma.
+\begin{lemma}[Leftover Hash Lemma\cite{STOC:ImpLevLub89}]
+Assume a family of functions $\{\hash_x:\bin^n\mapsto\bin^m\}_{x\in\Xc}$ is universal: $\forall\, a\ne b\in\bin^n$, $\Pr_{x\in\Xc}[\hash_x(a)=\hash_x(b)]=2^{-m}$. Then, for any random variable $W$,
+$$\sd((\hash_X(W),X), (U_m,X))\le \epsilon,
+$$
+whenever $m\le k-2\log(\frac{1}{\epsilon})+2$ and $k=H_\infty(W).$
+\end{lemma}
+
+\begin{lemma}[Rank of the Circulant Matrix\cite{Ingleton56}]
+\label{lem:rank-circulant}
+The rank of a circulant matrix $C$ of order $m$ is $m - d$,
+where $d$ is the degree of the greatest common divisors of $X^m-1$ and the associated polynomial of $C$.
+\end{lemma}
+
+Here, we present the cryptographic primitives and definitions which are meaningful to this thesis, as well as their security properties.
+
+\section{Basic Primitives}
+\subsection{Digital Signatures}  
+A digital signature scheme $\DS$, formally, 
+has a key generation algorithm $\kgen(\secpar)$ 
+that takes the security parameter $\secpar$ and outputs the verification/signing key pair $(\vk,\sk)$,  
+a signing algorithm $\sign(\sk,m)$ 
+inputs a signing key and a message $m \in \{ 0,1\}^*$ and outputs a 
+signature $\sigma$, and a verification algorithm 
+$\verify(\vk,m,\sigma)$ outputs $1$ if $\sigma$ is a valid signature
+on $m$ under the verification key $\vk$, and outputs $0$ otherwise. 
+We require unforgeability, which guarantees that a PPT adversary cannot forge a fresh signature on a fresh message of its choice under a given verification key while having access to a signing oracle (that returns valid signatures on the queried messages). Formally the notion can be captured in an experiment denoted by $\eufcma$.
+Strong unforgeability refers to the case where the adversary is required to forge a fresh signature on not necessarily a fresh message. Formally the notion can be captured in an experiment denoted by $\seufcma$.
+
+\subsection{Key Encapsulation Mechanism} 
+A key encapsulation mechanism $\kem$, formally, has a key generation algorithm $\kgen(\secpar)$ that takes the security parameter $\secpar$ and outputs a encaps key $\ek$ and a decaps key $\dk$. An encapsulation algorithm $\encaps(\ek)$ inputs an encaps key and outputs a ciphertext $C$ and agreed key $K$. Finally, we have a decapsulation algorithm $\decaps(\dk)$ inputs a decaps key and a ciphertext and outputs an agreed key $K$. Apart from $\indcca$ security, we additionally require its anonymous property which can be formally captured in ~\cref{def:anocca} denoted by $\anocca$ and it means the adversary cannot link any ciphertext $C$ to its encaps key $
+\ek$ even being able to access a decaps oracle. Concretely, we use Kyber~\cite{NISTPQC-R3:CRYSTALS-KYBER20} with the modification shown in Figure 6 of~\cite{EC:GruMarPat22}.
+
+\subsection{UC Framework}
+In this thesis, we use the UC framework by Canetti \cite{FOCS:Canetti01} to analyze the security of our protocols.\footnote{We refer the reader to \cite{FOCS:Canetti01} for a detailed explanation of the framework.} Throughout this thesis, we usually consider semi-honest adversaries, unless stated otherwise. Let $\Fc$ be a functionality, $\pi$ a protocol that implements $\Fc$ and  $\Ec$ be an environment, an entity that oversees the execution of the protocol in both the real and the ideal worlds. Let $\IDEAL_{\Fc,\Sim,\Ec}$ be a random variable that represents the output of $\Ec$ after the execution of $\Fc$ with adversary $\Sim$. Similarly, let $\REAL_{\pi,\Ac,\Ec}$  be a random variable that represents the output of $\Ec$ after the execution of $\pi$ with adversary $\Ac$.
+
+% \begin{definition}
+% We say that a protocol $\pi$ \emph{UC-realizes} $\Fc$ if for every PPT adversary $\Ac$ there is a PPT simulator $\Sim$ such that for all PPT environments $\Zc$, $$\IDEAL_{\Fc,\Sim,\Zc}\approx \EXEC_{\pi,\Ac,\Zc}$$ where $\Fc$ is an ideal functionality.
+% \end{definition}
+
+% In terms of security, we work in the standard UC-framework~\cite{FOCS:Canetti01}. Let $\Fc$ be a functionality, $\pi$ a protocol that implements $\Fc$ and  $\Ec$ be an environment, an entity that oversees the execution of the protocol in both the real and the ideal worlds. Let $\IDEAL_{\Fc,\Sim,\Ec}$ be a random variable that represents the output of $\Ec$ after the execution of $\Fc$ with adversary $\Sim$. Similarly, let $\REAL_{\pi,\Ac,\Ec}$  be a random variable that represents the output of $\Ec$ after the execution of $\pi$ with adversary $\Ac$.
+
+\begin{definition}
+\label{def:ucsecurity}
+A protocol $\pi$ \emph{implements $\Fc$} if for every PPT adversary $\Ac$ there is a PPT simulator $\Sim$ such that for all PPT environments $\Ec$, the distributions $\IDEAL_{\Fc,\Sim,\Ec}$ and $ \REAL_{\pi,\Ac,\Ec}$ are computationally indistinguishable.
+\end{definition}
+
+
+\subsection{Strong Extractors}
+
+Extractors allow the extraction of randomness from sources with a certain min-entropy.
+
+\begin{definition}[Strong Extractor]
+A \emph{$(k,\varepsilon)$-strong extractor} $\mathsf{Ext}:\Sc\times \Xc\to \Yc$ is a deterministic algorithm with domain $\Xc$, seed space $\Sc$ and range $\Yc$ with the following property: For every distribution $X$ with support $\Xc$ and min-entropy at least $k$, $$(s,\mathsf{Ext}(s,x))\approx_\varepsilon (s,y)$$ where $x\sample X$ and $y\sample \Yc$.
+\end{definition}
+
+\subsection{Public-Key Encryption}
+We recall the classical definition of public-key encryption (PKE).
+
+\begin{definition}[Public-Key Encryption]
+A \emph{Public-Key Encryption} (PKE) scheme is defined by the following algorithms:
+\begin{itemize}
+    \item $ \mathsf{KeyGen}(1^\lambda)$ takes as input a security parameter. It outputs a public key $\pk$ and a secret key $\sk$.
+    \item $\enc(\pk,m)$ takes as input a public key $\pk$ and a message $m\in\bin^*$. It outputs a ciphertext $\ct$.
+    \item $ \dec(\sk,\ct)$ takes as input a secret keys $\sk$ and a ciphertext $\ct$. It outputs a message $m$ or bot $\perp$.
+\end{itemize}{}
+We require the usual correctness and IND-CPA properties for a PKE.
+
+\begin{itemize}
+    \item \textbf{Correctness:} We say that a PKE is \emph{correct} if $$\Pr\left[m\leftarrow\dec(\sk,\enc(\pk,m) ):\begin{array}{c}
+     (\pk,\sk)\leftarrow\mathsf{KeyGen}(1^\lambda)
+\end{array}\right]=1.$$
+\item \textbf{IND-CPA security:} For  any PPT adversary $\Ac$, we require that $$\Pr\left[b\leftarrow\Ac(\ct,\st):\begin{array}{c}
+     (\pk,\sk)\leftarrow\mathsf{KeyGen}(1^\lambda)  ; \text{ }
+     (m_0,m_1,\st)\leftarrow\Ac\left(\pk \right) \\ 
+     b\sample \bin  ; \text{ }
+     \ct\leftarrow\enc(\pk,m_b)
+\end{array}{}\right]\leq \negl[\lambda].$$
+\end{itemize}
+\end{definition}
+
+
+\begin{definition}[Binomial Distribution\cite{NISTPQC-R3:CRYSTALS-KYBER20}]
+We define the binomial distribution $B_\eta$ as follows:
+$$(a_1,\dots, a_\eta, b_1, \dots, b_\eta) \sample \bin^{2\eta},$$
+and then output $\sum_i^\eta a_i-b_i$. If we write some polynomial $f\sample B_\eta$, then each coefficient of $f$ is sampled from $B_\eta$.
+\end{definition}
+
+\begin{definition}[Anonymous KEM\cite{EC:GruMarPat22}]\label{def:anocca}
+A $\kem$ is said to be \emph{anonymous under chosen-ciphertext attacks} if there exists a negligible function $\negl[\secpar]$ for all $\secpar\in\NN$, and for all adversaries $\Ac$ the following holds:
+$$\Pr\left[\anocca^\Ac(\secpar)=1\right]\le \frac{1}{2} + \negl[\secpar]
+$$
+where $\anocca$ is defined in~\cref{fig:experiment_anonymous_ke}. Similarly, we also define $\ikcpa$ experiment for $\pke$ in~\cref{fig:experiment_ambiguous}, which just removes access to the decryption oracle\cite{AC:BBDP01}.
+\end{definition}
+
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+    \begin{pcvstack}
+    \procedure[space=keep,codesize=\scriptsize]{$\anocca^\Ac_\kem(\secpar)$}{
+    (\ek_0, \dk_0) \gets \kem.\gen(\secpar)\\
+    (\ek_1, \dk_1) \gets \kem.\gen(\secpar)\\
+    b \sample \bin\\
+    (C^*, K^*) \gets \kem.\encaps (\ek_b)\\
+    b' \gets \adv^{\decaps\Oc(\cdot,\cdot)} (\ek_0,\ek_1, C^*, K^*) \\
+    b_0 := (b=b')\\
+    \pcreturn b_0
+    }
+    \end{pcvstack}
+    \pchspace
+    \procedure[space=keep,codesize=\scriptsize]{$\decaps\Oc(b',C')$}{
+        K':=\kem.\decaps(\dk_{b'}, C')\\
+        \pcreturn K'
+    }
+    \end{pchstack}
+    \caption{Experiment for $\anocca^\Ac_\kem(\secpar)$}
+    \label{fig:experiment_anonymous_ke}
+\end{figure}
+
+\begin{definition}[Uniformly-Ambiguous Encryption\cite{CCS:BLMG21}]
+\label{def:ambiguous}
+Let $\pke := (\gen, \enc, \dec)$ be a public-key encryption scheme for the message
+space $\bin^n$. For any $\secpar\in\NN$, uniformly sampled message $\mn\sample\bin^n$, we say $\pke$ is $\uniamb$-secure if
+\begin{align*}
+    \advantage{\uniamb}{\secpar}[(\Ac)] :=
+    \Big|\Pr[\uniamb^\Ac_\pke(\secpar)\Rightarrow 0] &-\\\Pr[\uniamb^\Ac_\pke(\secpar)\Rightarrow 1] \Big|
+    \le \negl[\secpar],
+\end{align*}
+where the experiment $\uniamb^\Ac_\pke(\secpar)$ is defined in~\cref{fig:experiment_ambiguous}.
+\begin{figure}[!t]
+\centering
+    \begin{pchstack}[boxed]
+    \procedure[space=keep,codesize=\scriptsize]{$\uniamb^\Ac_\pke(\secpar)$}{
+    (\pk_0, \sk_0) \gets \pke.\gen(\secpar)\\
+    (\pk_1, \sk_1) \gets \pke.\gen(\secpar)\\
+    b \sample \bin\\
+    \mn \sample \bin^n\\
+    \cn^* \gets \pke.\enc (\pk_b, \mn)\\
+    b' \gets \adv (\pk_0,\pk_1,\sk_0,\sk_1, \cn^*) \\
+    \pcreturn b\eqornot b'
+    }
+
+    \pchspace
+    \procedure[space=keep,codesize=\scriptsize]{$\ikcpa^\Ac_\pke(\secpar)$}{
+    (\pk_0, \sk_0) \gets \pke.\gen(\secpar)\\
+    (\pk_1, \sk_1) \gets \pke.\gen(\secpar)\\
+    (\st_\Ac, m)\gets\adv_1(\pk_0,\pk_1)\\
+    b \sample \bin\\
+    c^* \gets \pke.\enc (\pk_b, m)\\
+    b' \gets \adv_2 (\st_\Ac, \pk_0,\pk_1, c^*) \\
+    \pcreturn b\eqornot b'
+    }
+    \end{pchstack}
+    \caption{Experiment for $\uniamb^\Ac_\pke(\secpar)$ and $\ikcpa^\Ac_\pke(\secpar)$}
+    \label{fig:experiment_ambiguous}
+\end{figure}
+
+\end{definition}
+
+
+
+\section{Polynomials}
+
+We first introduce minimal polynomials of a sequence and of a matrix. Then we present how they can be used to solve linear algebra-related problems.
+
+\subsubsection{Minimal Polynomial of a Matrix}
+The minimal polynomial of a sequence $\mathfrak{a}$ is the least degree polynomial $m$ such that $\langle m\rangle=\mathit{Ann}(\mathfrak a)$ where $\mathit{Ann}(\mathfrak a)$ is the annihilator ideal of $\mathfrak a$ (that is, the ideal such that every element $f$ of $\mathit{Ann}(\mathfrak a)$ satisfies $f\cdot \mathfrak a=0$).
+
+\begin{lemma}[Lemma 3 in \cite{TCC:KMWF07}]
+\label{lemma:minpolymatrix}
+Let $\An\in\FF^{n\times n}$ and let $m_\An$ be the minimal polynomial of matrix $\An$.
+For $\un,\vn\sample \FF^n$, we have $m_\An = m_{\mathfrak{a}'}$ with probability
+at least $1-2\deg(m_\An)/|\FF|$, where $\mathfrak{a}'=(\un^{\mathsf{T}} \An^i \vn)_{i\in\NN}$. Moreover, $m_{\mathfrak{a}'}$ can be calculated using a Boolean circuit of size $\Oc(nk\log n\log k\log\log k)$ where $k=\log|\FF|$%=\Oc(n)$.
+\end{lemma}
+
+
+\subsubsection{Compute the Rank of a Matrix and Solve a Linear System}\label{sec:rank-ls}
+
+
+\begin{lemma}[\cite{KaltofenSaunders91}]\label{lem:rank-1}
+Let $\An\in \FF^{n\times n}$ of (unknown) rank $r$. Let $\Un$ and $\Ln$ be
+randomly chosen unit upper triangular and lower triangular Toeplitz matrices in
+$\FF^{n\times n}$, and let $\Bn=\Un\An\Ln$. Let us denote the $i\times i$ leading principal of $\Bn$ by $\Bn_i$. The
+probability that $\det(\Bn_i) \neq 0$ for all $1\leq i\leq r$ is greater than $1-n^2/|\FF|$.
+\end{lemma}
+
+\begin{lemma}[\cite{KaltofenSaunders91}]\label{lem:rank-2}
+Let $\Bn\in \FF^{n\times n}$ with leading invertible principals up to $\Bn_r$
+where $r$ is the (unknown) rank of $\Bn$. Let $\Xn$ be a randomly chosen diagonal matrix
+in $\FF^{n\times n}$. Then, $r = \deg(m_{\Xn\Bn})-1$ with probability greater than $1-n^2/|\FF|$.
+\end{lemma}
+
+\subsection{Polynomials and Interpolation}
+We present a series of results that will be useful to analyze the correctness and security of the protocols presented in this thesis.
+
+The following lemma shows how we can mask a polynomial of degree less than $t$ using a uniformly random polynomial.
+
+\begin{lemma}[\cite{C:KisSon05}]
+\label{lemma:randomPoly}
+Let $\FF_p$ be a prime order field, $P(x),Q(x)$ be two polynomials over $\FF_p$ such that $\deg P =\deg Q=d\leq t$ and $\gcd(P,Q)=1$. Let $R_1,R_2\sample \FF_p$ such that $\deg R_1=\deg R_2=t$. Then $U(x)=P(x)R_1(x)+Q(x)R_2(x)$ is a uniformly random polynomial with $\deg U\leq 2t$.
+\end{lemma}{}
+Note that this result also applies to multiple polynomials as long as they don't share a common factor (referring to Theorem 2 and Theorem 3 of \cite{C:KisSon05} for more details).
+
+We say that $f$ is a rational function if $f(x)=\frac{P(x)}{Q(x)}$ for two polynomials $P$ and $Q$.% The polynomials $P$ and $Q$ can also be recovered via interpolation.
+
+The next two lemmata show that we can recover a rational function via interpolation and that this function is unique.
+
+\begin{lemma}[\cite{minsky03}]
+\label{lem:minsky}
+Let $f(x)=P(x)/Q(x)$ be rational function where $\deg P(x)=m$ and $\deg Q(x)=n$. Then $f(x)$ can be uniquely recovered (up to constants) via interpolation from  $m+n+1$ points. In particular, if $P(x)$ and $Q(x)$ are monic, $f(x)$ can be uniquely recovered from $m+n$ points.
+\end{lemma}
+
+
+
+\begin{lemma}[\cite{minsky03}]
+\label{lem:unique-rational-func}
+Choose $V$ to be a support set\footnote{A support set is a set of pairs $(x,y)$.} of cardinality $m_1+m_2+1$. Then, there is a unique rational function $f(x)=P(x)/Q(x)$  that can be interpolated from $V$, and $P(x)$ has degree at most $m_1$ and $Q(x)$ has degree at most $m_2$.
+\end{lemma}
+
+\section{Lattices}
+We now review some basic notions of lattices and Gaussian distributions.
+
+Let $\Bn\in\RR^{k\times n}$ be a matrix. We denote the lattice generated by $\Bn$ by  $\Lambda=\Lambda(\Bn)=\{\xn\Bn: \xn\in\ZZ^k\}$.\footnote{The matrix $\Bn$ is called a basis of $\Lambda(\Bn)$.} The dual lattice $\Lambda^*$ of a lattice $\Lambda$ is defined by $\Lambda^*=\{\xn\in\RR^n:\forall y\in\Lambda, \xn\cdot \yn\in\ZZ\}$. It holds that $(\Lambda^*)^*=\Lambda$.  The orthogonal lattice $\Lambda_q^\perp$ is defined by $\{\yn\in\ZZ_q^n:\An\yn^T=0\mod q\}$.
+
+
+\begin{definition}[Cyclotomic Polynomial]\label{def:cyclo}
+We denote by $R$ the ring $\ZZ[X]/(X^n +1)$ and by $R_q$ the ring $\ZZ_q [X]/(X^m+1)$, where $m = 2^{m'-1}$ such that $X^m + 1$ is the $2m'$-th cyclotomic polynomial $\Phi_{2m'}(X)$. Moreover, we have
+$$
+\prod_{d|m} \Phi_d(X) = X^m-1.
+$$
+\end{definition}
+
+
+Let $\rho_s(\xn)$ be the probability distribution of the Gaussian distribution over $\RR^n$ with parameter $s$ and centred in $0$. 
+ We define the discrete Gaussian distribution $D_{S,s}$ over $S$ and with parameter $s$ by the probability distribution $\rho_s(\xn)/\rho(S)$ for all $\xn\in S$ (where $\rho_s(S)=\sum_{\xn\in S}\rho_s(\xn)$). 
+
+For $\varepsilon>0$, the smoothing parameter $\eta_\varepsilon(\Lambda)$ of a lattice $\Lambda$ is the least real $\sigma>0$ such that $\rho_{1/\sigma}(\Lambda^*\setminus \{0\})\leq \varepsilon$ \cite{FOCS:MicReg04}.
+
+
+\begin{lemma}[\cite{MathAnnal:Ban93}]
+\label{lemma:normDG}
+For all $\alpha\in \RR$, $\norm{\xn}\leq \alpha\sqrt{n}$ for $\xn\sample D_{\ZZ,\alpha}^n$, except with negligible probability in $n$.
+\end{lemma}
+
+
+We will make use of the following convolution property of discrete Gaussians.
+
+\begin{lemma}[\cite{PKC:GMPW20}, Corollary 4.8]\label{lem:gaussconv}
+Let $\Lambda_1,\Lambda_2 \subseteq \RR^n$ be lattices, let $\sigma_1,\sigma_2 > 0$ be such that $1/\sqrt{1/\sigma_1^2 + 1/\sigma_2^2} > \eta_\epsilon(\Lambda_1 \cap \Lambda_2)$ for some $\epsilon = \negl$. Then it holds for all $\vc{a},\vc{b} \in \RR^n$ that $D_{\Lambda_1 + \vc{a},\sigma_1} + D_{\Lambda_2 + \vc{b},\sigma_2}$ is statistically close to $D_{\Lambda_1 + \Lambda_2 + \vc{a} + \vc{b},\sqrt{\sigma_1^2 + \sigma_2^2}}$.
+\end{lemma}
+
+We just need the following simple corollary of Lemma~\ref{lem:gaussconv}, which can be obtained by setting $\Lambda_1 = \Lambda_2 = \ZZ$.
+
+\begin{corollary}\label{cor:gaussconv}
+Let $\sigma_1,\sigma_2$, $\sigma_3 = \sqrt{\sigma_1^2 + \sigma_2^2}$ be such that $\sigma_1 \sigma_2 / \sigma_3 > \eta_\epsilon(\ZZ)$ for a negligible $\epsilon$ and let $a,b \in \ZZ$. Then $D_{\ZZ + a,\sigma_1} + D_{\ZZ + b,\sigma_2}$ and $D_{\ZZ + a + b,\sigma_3}$ are statistically close. 
+\end{corollary}
+
+
+
+
+\paragraph{Gadget matrix.} For given parameters $n,q\in\ZZ$, let $\gn$ be the vector $\left(1,2,2^2,\dots, 2^{\lceil\log q\rceil-1}\right)$ and $\Gn=\gn\otimes \In_n$ where $\In_n$ is the identity matrix of size $n$. The matrix $\Gn$ is usually called the gadget matrix \cite{EC:MicPei12}.
+
+Moreover, let $\bar \Gn_n=\sum_i \Gn_i\in\ZZ^{n\times \lceil\log q\rceil}$ where $\Gn_i$ is the matrix which is zero everywhere but its $i$-th row is $\gn$.
+
+The function $\gn^{-1}:\ZZ_q\to\ZZ^m$, where $m=\lceil\log q\rceil$, receives a value $v\in\ZZ_q$ and outputs its binary decomposition. Note that $\gn\cdot\gn^{-1}(v)=v\mod q$. Following \cite{C:BdMW16}, we define $\gn^{-1}_\mathsf{rnd}$ to be the function that, on input $v\in\ZZ_q$, outputs $\xn\sample D_{\Lambda^\perp_q(\gn)+\gn^{-1}(v),r}$, where $r=\tilde \Oc(1)$. It holds that $\gn\cdot\gn^{-1}_\mathsf{rnd}(v)=v\mod q$.
+
+
+
+\section{Hardness Assumptions}
+\label{sec:hardnessassum}
+We start by introducing some notation. Let $\mathsf{Primes}(\kappa)$ denote the set of prime numbers of bit-length $\kappa$. Let $$\mathsf{RSA}(\lambda)=\{N:N=PQ\text{ and } P,Q\in\mathsf{Primes}(\lambda/2)\text{ and } \gcd(P-1,Q-1)=2\}$$ and  $$\mathsf{RSA}_e(\lambda)=\{N:e|\phi(N)\}$$ for any $e\leq 2^\lambda$.
+\subsection{Phi-Hiding}
+\begin{definition}[Phi-Hiding]
+The \emph{phi-hiding} assumption, denoted as $\phi$-hiding, states that for all  $\varepsilon>0$ and $3<e<2^{\lambda/4-\varepsilon}$ and all PPT adversaries $\Ac$, we have that $$\left|\Pr\left[1\leftarrow\Ac(N,e):N\sample \mathsf{RSA}(\lambda)\right]-\Pr\left[1\leftarrow\Ac(N,e):N\sample \mathsf{RSA}_e(\lambda)\right]\right|\leq \negl[\lambda].$$
+\end{definition}
+
+Let $N=PQ$ where $\gcd(P-1,Q-1)=2$.  Consider the multiplicative group $\ZZ_{N^{\xi+1}}^*$ where $\xi$ is a fixed non-negative integer. Recall that  $\ZZ_{N^{\xi+1}}^*$ can be written as the product of two subgroups $\mathbb{H}_N\times \mathbb{NR}_N$ where $\mathbb{H}_N=\{(1+N)^i:i\in [N^\xi]\}$ and $\NR_N=\{x^{N^\xi}:x\in\ZZ_{N^{\xi+1}}^*\}$ (the subgroup of $N^\xi$-residues) which has order $\phi(N)$. Given $(1+N)^m\smod N^{\xi+1}$, there is a polynomial-time algorithm that allows to recover $m$ \cite{PKC:DamJur01}.
+
+Furthermore, note that $\NR_N$ can be decomposed into the product of two subgroups cyclic $\ZZ_P^*$ (of order $P-1$) and $\ZZ_Q^*$ (of order $Q-1$). Since  $\gcd(P-1,Q-1)=2$, then there is a cyclic subgroup  $\TT_N$ of $\ZZ_P^*\times\ZZ_Q^*$ of order $\phi(N)/2$. Also, consider the product $\mathsf{J}_N=\mathbb{H}_N\times \TT_N$. It is easy to show that  the subset membership problem for $(\mathbb{J}_N, \TT_N)$ is still hard if the DCR assumption holds. %as shown in Section 8.2 of \cite{EC:CraSho02}.
+
+
+The following lemma is straightforwardly adapted from \cite{C:GoyVusWat20}.
+
+\begin{lemma}[\cite{C:GoyVusWat20}]
+\label{lemma:phiext}
+Assume that the $\phi$-hiding assumption holds. Let $\mathsf{Ext}$ be a $(\kappa-1,\negl[\lambda])$-strong extractor. For every admissible stateful PPT adversary $\Ac$ and for all $\lambda,\kappa$ such that $\lambda\geq 5\kappa$, we have that $$\left|\Pr\left[b\leftarrow\Ac(y_b):\begin{array}{c}
+     N\sample \mathsf{RSA}(\lambda) ; \text{ } 
+     s\sample\bin^\lambda \\
+     e\sample \mathsf{Primes}(\kappa) ; \text{ } 
+     g\leftarrow\TT_N\\
+     G\leftarrow\Ac(N,s,e,g) ; \text{ }  
+     b\sample \bin \\ 
+     y_0\leftarrow\mathsf{Ext}(s,g^{G e^{-1}}\smod N^{\xi+1}) ; \text{ }  
+     y_1\sample \Yc
+\end{array}\right]-\frac{1}{2}\right|\leq \negl[\lambda]$$ where an admissible adversary is one that outputs $G$ such that $e$ does not divide $G$.
+\end{lemma}
+
+\subsection{Decisional Composite Residuosity}
+In this thesis, we also make use of the Decisional Composite Residuosity (DCR) assumption which we define in the following. We present the DCR assumption as a subgroup indistinguishability assumption \cite{C:BraGol10}.
+
+\begin{definition}[Decisional Composite Residuosity]
+Let $N=\mathsf{RSA}(\lambda)$ and let $\xi\geq 0$ be a fixed integer. The \emph{decisional composite residuosity} (DCR) assumption states that for all PPT adversaries $\Ac$, $$\left|\Pr\left[1\leftarrow\Ac(N,x):x\sample \ZZ_{N^{\xi+1}}^*\right]-\Pr\left[1\leftarrow\Ac(N,x):x\sample \mathbb{NR}_N\right]\right|\leq \negl[\lambda].$$
+\end{definition}
+
+
+\begin{lemma}[\cite{EC:CraSho02}]
+\label{lemma:DCRforQR}
+$N=\mathsf{RSA}(\lambda)$ and let $\xi\geq 0$ be a fixed integer. Assume that the DCR assumption holds. Then for all PPT adversaries $\Ac$, $$\left|\Pr\left[1\leftarrow\Ac(N,x):
+        x\sample \mathbb{J}_N
+\right]-\Pr\left[1\leftarrow\Ac(N,x):x\sample \TT_N\right]\right|\leq \negl[\lambda].$$
+\end{lemma}
+\begin{proof}[Proof (sketch)]
+
+The proof follows from the following observation: The map $x\to x^2(-1)^b$ where $b\sample \bits$ sends the uniform distribution on $\NR_N$ to the uniform distribution on $\TT_N$, and the uniform distribution on $ \mathbb{H}_N\times\NR_N$ to the uniform distribution on $\mathbb{H}_N\times\TT_N$.
+\end{proof}
+
+
+
+\begin{corollary}
+\label{lemma:variantDCR}
+Assume that the DCR assumption holds. Then for all PPT adversaries $\Ac$,
+$$\left|\begin{array}{c}
+     \Pr\left[1\leftarrow\Ac(N,x):x\sample \TT_N\right]-  \\
+     \Pr\left[1\leftarrow\Ac(N,x):\begin{array}{c}
+     x'\sample \TT_N \\
+     x=x'(1+N) \smod N^{\xi+1}
+\end{array}\right]
+\end{array} \right|\leq \negl[\lambda].$$
+\end{corollary}
+
+\begin{proof}[Proof (sketch)]
+In the first experiment, we replace $x$ with a uniform value over $\JJ_N$ using the DCR assumption. In the second experiment, we replace $x'$ with a uniform value over $\JJ_N$ (again using the DCR assumption). We obtain two experiments where $x$ is sampled uniformly over  $\JJ_N$ and thus they are indistinguishable.
+\end{proof}
+
+
+\subsection{Subgroup Decision}
+We also use Boneh-Goh-Nissim (BGN) cryptosystem \cite{TCC:BonGohNis05} in our range proofs. Thus, its underlying Subgroup Decision (SD) assumption is rephrased as follows for completeness.
+
+Let $\Gc$ be an algorithm that takes a security parameter as input and
+outputs $\mathsf{val:=}(p,q,\GG,\GG_1,e)$ such that $p,q$ are primes, $n = pq$ and $\GG, \GG_1$ are descriptions of groups of order $n$
+and $e:\GG \times \GG \to \GG_1$ is a bilinear map.
+Let $q\GG$ be the subgroup of $\GG$ of order $q$. 
+
+
+\begin{definition}[Subgroup Decision \cite{EC:GroOstSah06}]
+Let $\Gc$ be an algorithm that takes a security parameter as input and
+outputs $\mathsf{val:=}(p,q,\GG,\GG_1,e)$ such that $p,q$ are primes, $n = pq$ and $\GG, \GG_1$ are descriptions of groups of order $n$
+and $e:\GG \times \GG \to \GG_1$ is a bilinear map.
+Let $q\GG$ be the subgroup of $\GG$ of order $q$. 
+The \emph{subgroup decision} (SD) assumption holds for generator $\Gc$ states that for all PPT adversaries $\Ac$,
+$$
+\left| \begin{array}{c}
+     \Pr\left[1\leftarrow\Ac(n,\GG,\GG_1,e,G,H):\begin{array}{c}
+     \mathsf{val}\gets \Gc(1^k), \quad n=pq  \\
+     G,H\gets\GG_{gen}
+\end{array} \right] - \\
+\Pr\left[1\leftarrow \Ac(n,\GG,\GG_1,e,G,H):\begin{array}{c}
+     \mathsf{val}\gets\Gc(1^k), \quad
+     n=pq \\
+     G\gets\GG_{gen}, \quad 
+     H\gets q\GG\setminus\{1\}
+\end{array}\right]
+\end{array}
+\right|\leq \negl[\lambda].$$
+\end{definition}
+
+\subsection{Computational Diffie-Hellman}
+\begin{definition}[Computational Diffie-Hellman]
+Let $\Gc(\lambda)$ be an algorithm that outputs $(\GG,p,g)$ where $\GG$ is a group of prime order $p$ and $g$ is a generator of the group. The Computational Diffie-Hellman (CDH) assumption holds for generator $\Gc$ if for all PPT adversaries $\Ac$ $$\Pr\left[g^{a_1a_2}\leftarrow\Ac(\GG,p,g,g^{a_1},g^{a_2}):\begin{array}{c}
+     (\GG,p,g)\leftarrow\Gc(\lambda)  \\
+     a_1,a_2\sample \ZZ_p
+\end{array}\right]\leq \negl[\lambda].$$
+\end{definition}
+
+\subsection{Learning with Errors}
+\begin{definition}[Learning with Errors]
+\label{assum:lwe}
+Let $q,k\in \NN$ where $k\in\mathsf{poly}(\lambda)$, $\An\in\ZZ_q^{k\times n}$ and $\beta\in\RR$. For any $ n=\mathsf{poly}(k\log q)$, the Learning with Errors (LWE) assumption holds if for every PPT algorithm $\Ac$ we have $$\left |\Pr\left [1\leftarrow \Ac(\An,\sn\An+\en) \right ] -\Pr\left [1\leftarrow \Ac(\An,\yn) \right ]\right  |\leq \negl[\lambda]$$ for $\sn\sample \bin^k$, $\en\sample D_{\ZZ^n,\beta}$ and $\yn\sample \bin^n$, where $D_{\ZZ^n,\beta}$ is some error distribution.
+\end{definition}
+
+
+\begin{definition}[Learning with Errors ($\lwe$)\cite{STOC:Regev05}]
+For a vector $\sn\in\ZZ^n_q$ called the secret, the $\lwe$ distribution $A_{\sn,\chi}$ over $\ZZ^n_q\times\ZZ_q$ is sampled by choosing $a\in\ZZ_q^n$ uniformly at random, choosing $e\sample\chi$, and outputting $(\an,b=\langle\an,\sn\rangle+e\mod q)$. Moreover, decisional-$\lwe_{n,m,q,\chi}$ is
+\begin{align*}
+    \advantage{\lwe}{n,m,q,\chi}[(\Ac)] = \big|    \Pr[b=1 & |\An\sample\ZZ^{m\times n}_q,\tn\sample \ZZ^m_q;\\ &b\gets\Ac(\An,\tn)] \\
+    -\Pr[b=1 | \An\gets \ZZ^{m\times n}_q, &
+    \sn\sample\ZZ_q^n,\en\sample \chi^m;\\ &b\gets\Ac(\An,\An\sn+\en)]\big|.
+\end{align*}
+\end{definition}
+
+\begin{definition}[Module Learning With Errors $\msf{MLWE}$ \cite{ITCS:BraGenVai12}]
+For integers $m, k$, and a probability distribution $D: R_q \to [0, 1]$,
+we say that the advantage of algorithm $\Ac$ in solving the decisional $\mlwe_{m,k,D}$ problem
+over the ring $R_q$ is
+\begin{align*}
+    \advantage{\mlwe}{m,k,D}[(\Ac)] = \big| \Pr[b=1 &|\An\gets R^{m\times k}_q,\tn\gets R^m_q; \\
+    &b\gets\Ac(\An,\tn)] \\
+    -\Pr[b=1 | \An\gets R^{m\times k}_q, & \sn_1\gets D^k,\sn_2\gets D^m;\\
+    &b\gets\Ac(\An,\An\sn_1+\sn_2)]\big|
+\end{align*}
+\end{definition}
+
+\begin{definition}[Module Short Integer Solution $\msf{MSIS}$\cite{STOC:Ajtai98}]
+\begin{align*}
+    \advantage{\msis}{m,k,\gamma}[(\Ac)]=
+    &\Pr\Big[0<\norm{\vc{y}}_\infty <\gamma  \wedge \vc{[I\,\vert\, A]\cdot y=0}
+    \,\big|\, \\
+    &\vc{A}\gets R^{m\times k}_q; \vc{y}\gets\Ac(\vc{\vc{A}})\Big]
+\end{align*}
+\end{definition}
+
+\begin{definition}[The $\msf{SelfTargetMSIS}$ Problem in \cite{NISTPQC-R3:CRYSTALS-DILITHIUM20}]
+\label{def:selftargetSIS}
+Suppose that $\hash:\bin^\ast\to B_\tau$ is a cryptographic hash
+function. To an algorithm $\Ac$ we associate the advantage function
+\begin{align*}
+    &\advantage{\selfmsis}{\hash,m,k,\gamma}[(\Ac)]=\\
+    &\Pr\left[
+    \begin{aligned}
+        &0<\norm{\vc{y}}_\infty <\gamma \\
+        &\wedge H(\mu \,\Vert\, \vc{[I\vert A]\cdot y})=c
+    \end{aligned}
+    \,\middle|\,
+    \begin{aligned}
+        &\vc{A}\gets R^{m\times k}_q;\\ &(\vc{y}:=\begin{bmatrix}\vc{r}\\c\end{bmatrix},\mu)\gets\Ac^{|H(\cdot)\rangle}(\vc{\vc{A}})
+    \end{aligned}
+    \right]
+\end{align*}
+\end{definition}
+
+\subsection{Learning Parity with Noise}
+The Learning Parity with Noise (LPN) assumption is closely related to the problem of decoding a random linear code. Informally, it states that it is hard to find a solution for a noisy system of linear equations over $\ZZ_2$.
+
+\begin{definition}[Learning Parity with Noise]
+Let $n,m,t\in\NN$ such that $n\in \mathsf{poly}(\lambda)$ and let $\chi_{m,t}$ be a uniform distribution over the set of error vectors of size $m$ and hamming weight $t$. The \emph{Learning Parity with Noise} (LPN) assumption $\LPN(n,m,\rho)$ holds if for any PPT adversary $\Ac$ we have that $$\left|\Pr\left[1\leftarrow \Ac(\An,\sn\An+\en):\begin{array}{c}
+     \An\sample \bin^{n\times m} \\
+     \sn\sample \bin^n\\
+     \en\sample \chi_{m,t}
+\end{array}\right]-\Pr\left[1\leftarrow \Ac(\An,\yn):\begin{array}{c}
+     \An\sample \bin^{n\times m} \\
+     \yn\sample \bin^m\\
+\end{array}\right]\right|\leq \negl[\lambda]$$ where $\rho=m/t$ ($\rho$ is called the noise rate).
+\end{definition}
+
+In this thesis, we assume that the noise rate $\rho$ is $m^{1-\varepsilon}$ for any constant $\varepsilon>0$. The LPN assumption is believed to be hard for that noise rate (see e.g. \cite{CCS:BCGIKRS19} and references therein).
+
+
+\paragraph{LPN over larger fields.} Following \cite{CCS:BCGIKRS19,STOC:JaiLinSah21}, we define the LPN assumption over larger fields $\ZZ_q$ where $q>2$ is a prime number. In the following, let $\chi_{m,t,q}$ be the uniform distribution over $\{\vn\in\ZZ_q^m: \mathsf{hw}(\vn)=t\}$. In other words, $\chi_{m,t,q}$ is the uniform distribution over the set of vectors in $\ZZ_q$ which have $m-t$ null coordinates.
+
+\begin{definition}[LPN over larger fields assumption]
+Let $n,m,t,q\in\NN$ such that $n\in \mathsf{poly}(\lambda)$ and $q$ is a prime number, and let $\chi_{m,t,q}$ be as above. The \emph{LPN over larger fields}   assumption $\LPN(n,m,\rho,q)$ holds if for any PPT adversary $\Ac$ we have that $$\left|\Pr\left[1\leftarrow \Ac(\An,\sn\An+\en):\begin{array}{c}
+     \An\sample \ZZ_q^{n\times m} \\
+     \sn\sample \ZZ_q^n\\
+     \en\sample \chi_{m,t,q}
+\end{array}\right]-\Pr\left[1\leftarrow \Ac(\An,\yn):\begin{array}{c}
+     \An\sample \ZZ_q^{n\times m} \\
+     \yn\sample \ZZ_q^m\\
+\end{array}\right]\right|\leq \negl[\lambda]$$ where $\rho=m/t$.
+\end{definition}
+
+
+
+
+
+
+\section{Threshold Public-key Encryption}
+\label{subsec:TPKE}
+We present  some ideal functionalities regarding threshold public-key encryption (TPKE) schemes. In the following, $N$ is the number of parties. 
+
+Let   $\Fc_\mathsf{Gen}$ be the ideal functionality that distributes a secret share of the secret key and the corresponding public key. That is, on input $(\sid,\Ps_i),$ $\Fc_\mathsf{Gen}$ outputs $(\pk,\sk_i)$ to each party party where $(\pk,\sk_1,\dots, \sk_N)\leftarrow\mathsf{TPKE.Gen}(1^\lambda,N)$.
+
+Moreover, we define the functionality $\Fc_{\mathsf{DecZero}}$, which allows $N$ parties, each of them holding a secret share $\sk_i$, to learn if a ciphertext is an encryption of $0$ and nothing else. That is, $\Fc_{\mathsf{DecZero}}$ receives as input a ciphertext $c$ and the secret shares of each of the parties. It outputs $0$, if $0\leftarrow\dec(\sk_,\dots \dec(\sk_N,c)\dots)$, and $1$ otherwise. Note that these functionalities can be securely realized on various PKE schemes such as El Gamal  PKE or Pailler\footnotemark PKE \cite{PKC:HazVen17}.
+
+\footnotetext{We will assume the message space of Paillier's cryptosystem as a field as also mentioned in \cite{TCC:KMWF07}.}
+
+We also assume that the underlying TPKE (or plain PKE) is always additively homomorphic unless stated otherwise.
+
+
+\begin{definition}[Threshold Public-Key Encryption]
+A Threshold Public-Key Encryption (TPKE) scheme is defined by the following algorithms:
+\begin{itemize}
+    \item $(\pk,\sk_1,\dots, \sk_N)\leftarrow \mathsf{Gen}(1^\lambda,N)$ takes as input a security parameter. It outputs a public key $\pk$ and $N$ secret keys $(\sk_1,\dots, \sk_N)$.
+    \item $c\leftarrow \enc(\pk,m)$ takes as input a public key $\pk$ and a message $m\in\bin^*$. It outputs a ciphertext $c$.
+    \item $c'\leftarrow \dec(\sk_i,c)$ takes as input one of the secret keys $\sk_i$ and a ciphertext. It outputs a share decryption $c'$ of $c$.
+\end{itemize}{}
+\end{definition}{}
+
+\paragraph{Correctness.} For any $N\in\NN$ and any permutation $\pi:[N]\to[N]$,  we have that $$\Pr\left[m\leftarrow\dec(\sk_{\pi(N)},\dec(\sk_{\pi(N-1)},\dots \dec(\sk_{\pi(1)},\enc(\pk,m))\dots) )\right]=1$$ where $(\pk,\sk_1,\dots, \sk_N)\leftarrow\mathsf{Gen}(1^\lambda,N)$.
+
+\paragraph{IND-CPA security.} For any $N\in\NN$, any permutation $\pi:[N]\to[N]$ and any adversary $\Ac$, we require that $$\Pr\left[b\leftarrow\Ac(c,\st):\begin{array}{c}
+     (\pk,\sk_1,\dots, \sk_N)\leftarrow\mathsf{Gen}(1^\lambda,N)  \\
+     (m_0,m_1,\st)\leftarrow\Ac\left(\pk,\sk_{\pi(1)}, \dots , \sk_{\pi(k)}\right) \\ 
+     b\sample \bin \\
+     c\leftarrow\enc(\pk,m_b)
+\end{array}{}\right]\leq \negl[\lambda]$$ for any $k<N$.
+
+\paragraph{Additive Homomorphism.} We also assume that the TPKE (or plain PKE) is homomorphic for additive operation.\footnote{From now on, we always assume that PKE and TPKE used in this thesis fulfill this property, unless stated otherwise.} That is, for all $(\pk,\sk_1,\dots,\sk_N)\leftarrow\mathsf{Gen}(1^\lambda,N)$, we can define two groups $(\Mc,\oplus),(\Cc,\otimes)$ such that, given two ciphertexts $c_1\leftarrow\mathsf{Enc}(\pk,m_1)$ and $c_2\leftarrow\mathsf{Enc}(\pk,m_2)$, we require that $$c_1\otimes c_2=\mathsf{Enc}(\pk,m_1\oplus m_2).$$ By abuse of notation, we usually denote the operations of $\Mc$ and $\Cc$ as $+$.
+
+\section{Programmable Pseudorandom Functions}
+\label{subsec:pprf}
+Pseudorandom functions (PRF) are ubiquitous objects in cryptography. We present the definition of PRF in the following.
+
+\begin{definition}[Pseudorandom Function]
+A \emph{Pseudorandom Function} (PRF) is defined by a keyed function $\mathsf{PRF}:\Kc\times \Xc\to \Yc$ such that, for any PPT adversary $\Ac$ $$\left|\Pr\left[1\leftarrow\Ac(y,x):y\leftarrow\mathsf{PRF}(k,x)\right]-\Pr\left[1\leftarrow\Ac(y,x):y\leftarrow f(x)\right]\right|\leq \negl[\lambda]$$ for any $x\in\Xc$, where $f:\Xc\to\Yc$ is a uniformly chosen random function and the key $k$ is sampled uniformly at random from $\Kc$. 
+\end{definition}{}
+
+A programmable PRF allows the simulator to program the output of a PRF on several inputs at key generation time. 
+
+\begin{definition}[Programmable PRF \cite{CCS:KMPRT17}]
+\label{def:PPRF}
+A programmable PRF (PPRF) is composed of the following algorithms:
+\begin{itemize}
+    \item $k=(k',\mathsf{hint})\leftarrow\keygen(1^\lambda,(x,y))$ takes as input a security parameter and a  pair of points $(x,y)\in\Xc\times \Yc$. It outputs a key $k'$ and a hint $\mathsf{hint}$.
+    \item $y\leftarrow\mathsf{PPRF}(k,x)$ takes as input a key $k\in\Kc$ and a value $x\in\Xc$. It outputs $y\in\Yc$.
+\end{itemize}
+\end{definition}
+
+Correctness of the PPRF states that $y\leftarrow\mathsf{PPRF}(k,x)$ for the programmed point $(x,y)$. Security roughly states that it is hard for the adversary to guess the point $x$ which was programmed even given the hint (see \cite{CCS:KMPRT17}).
+
+
+\paragraph{An example.} Let $\mathsf{PRF}:\Kc\times \Xc\to \bin^\ell$ and $\mathsf{Primes}(\ell)$ be the primes of length $\ell$. In this thesis, we use a programmable PRF $\mathsf{PPRF}:\Kc\times (\Xc\times \ZZ)\to \mathsf{Primes}(\ell)$ in which the key (and the hint) is of the form $K=(k,k'=(k'_1,\dots, k'_\xi))\in \Kc\times \bin^{\ell\xi}$ and where the output of an element $x\in\Xc$ is computed as i) Start by initializing $i=1$. ii) Compute $y=\mathsf{PPRF}(k,(x,i))\oplus k'_i$. iii) Output $y$, if it is a prime number; else, set $i=i+1$ and return to step ii); repeat until $i=\xi$. It is easy to see that, under standard number-theoretic assumptions, the process described above outputs a prime number after $\Oc(\log 2^\ell)$ steps (e.g., \cite{ICALP:FouTib14}).  
+If we set $\xi\in\Oc((\log 2^\ell)^2)$, a direct calculation yields that the probability of not existing any $i\in [\xi]$ such that $\mathsf{PPRF}(k,(x,i))\oplus k'_i$ is not a prime is negligible in $\ell$.
+
+In order to program the output of $\mathsf{PPRF}$ at some input $x$, we first  sample a prime number $p$ and an index $i$ from a suitable distribution.\footnote{The index $i$ is sampled from the distribution of the number of uniform samples we need to perform in order to find a prime number. Such a distribution can be easily simulated by just running a prime sampler with true randomness and output $i$ (the number of trials until success) instead of the prime.} Then, we set $k'_i=p \oplus \mathsf{PPRF}(k,(x,i))$. Finally, we choose $k'_j$, for all $j<i$,  uniformly at random such that $\mathsf{PPRF}(k,(x,j))\oplus k'_j$ is not a prime number. All other $k'_j$, for $j>i$ are chosen uniformly at random. Such a procedure will succeed with non-negligible probability.
+
+This is a special case of the PPRF designed in \cite{CCS:KMPRT17} and it is easy to see that, if the PPRF is programmed on a pair of points $(x,y)\in\Xc\times \mathsf{Primes}(\ell)$ where $y\sample  \mathsf{Primes}(\ell)$, then it is hard for any PPT adversary $\Ac$ to guess the programmed point $x$.
+
+
+\paragraph{A remark.} We slightly overload the notation and denote  $k$ as the PPRF key  (which is composed of a PRF key $k'$ and a hint $\mathsf{hint}$ as in Definition \ref{def:PPRF}). We do this because, in our case, the hint (when it is a uniformly random value) reveals nothing about the programmed value \cite{CCS:KMPRT17}. That is, we will use the notation $K\leftarrow\mathsf{KeyGen}(1^\lambda,(x,y))$ where $K=(k,k'=\mathsf{hint})$.
+
+\section{Puncturable Pseudorandom Functions}
+In this section,  we recall another variant of PRF as follows.
+Puncturable pseudorandom functions (PPRFs) \cite{AC:BonWat13,CCS:KPTZ13,PKC:BoyGolIva14} are a special case of PRFs where a punctured key allows one to evaluate the PRF at all points except one. 
+
+\begin{definition}[Puncturable PRF]
+Let $\alpha=\alpha(\lambda)$ and $\beta=\beta(\lambda)$ be two polynomials. A puncturable PRF (PPRF) scheme $\mathsf{PPRF}_{\alpha,\beta}=\mathsf{PPRF}$ is composed by the following algorithms:
+\begin{itemize}
+\item $\mathsf{KeyGen}(1^\lambda)$ takes as input a security parameter $\lambda$. It outputs a key $\key$.
+    \item $\mathsf{Eval}(\key,\xn)$ takes as input a key $\key$ and $x\in\bin^\alpha$. It outputs $\yn\in\bin^\beta$.
+    \item $\mathsf{Punct}(\key,S)$ takes as input a key $\key$ and a subset $S\subseteq\bin^\alpha$. It outputs a punctured key $\key_S$.
+    \item $\mathsf{EvalPunct}(\key_S,\xn)$ takes as input a punctured key $\key_S$ and $\xn\in\bin^\alpha$. It outputs $\yn\in\bin^\beta$.
+\end{itemize}
+\end{definition}
+
+
+\begin{definition}[Correctness]
+A PPRF scheme $\mathsf{PPRF}$ is said to be correct if for all $\lambda\in\NN$, for all $S\subseteq\left(\bin^\alpha\right)^t$ (for $t=\poly[\lambda]$), all $\xn\notin S$  we have that $$\Pr\left[\mathsf{Eval}(\key,\xn)=\mathsf{EvalPunct}(\key_S,\xn):\begin{array}{c}
+     \key\leftarrow\mathsf{KeyGen}(1^\lambda) \\
+     \key_S\leftarrow\mathsf{Punct}(\key,S)
+\end{array}\right]= 1.$$
+\end{definition}
+
+
+\begin{definition}[Pseudorandomness]
+A PPRF scheme $\mathsf{PPRF}$ is said to be pseudorandom at punctured points if for all $\lambda\in\NN$, all PPT adversaries $\Ac=(\Ac_1,\Ac_2)$ we have that $$\left|\begin{array}{c}
+     \Pr\left[1\leftarrow\Ac_2(\key_S,S,T,\mathsf{aux}):\begin{array}{c}
+     (S,\mathsf{aux})\leftarrow\Ac_1(1^\lambda)  ; \,\,
+     \key\leftarrow\mathsf{KeyGen}(1^\lambda) \\ 
+      \key_S\leftarrow\mathsf{Punct}(\key,S); \,\,
+      T\leftarrow\mathsf{Eval}(\key,S)
+\end{array}\right]- \\
+     \Pr\left[1\leftarrow\Ac_2(\key_S,S,T,\mathsf{aux}):\begin{array}{c}
+     (S,\mathsf{aux})\leftarrow\Ac_1(1^\lambda)  ; \,\,
+     \key\leftarrow\mathsf{KeyGen}(1^\lambda) \\ 
+      \key_S\leftarrow\mathsf{Punct}(\key,S) ;\,\,
+      T\sample \bin^{\beta |S|}
+\end{array}\right]
+\end{array}\right|\leq \negl[\lambda].$$
+\end{definition}
+
+
+PPRFs can be built solely based on any length-doubly pseudorandom generators (PRG)\footnote{Which in turn, can be based on LWE, DDH or QR assumptions.} via (a variant of) the tree-based construction of \cite{JACM:GolGolMic86}. Throughout this thesis, we call the term GGM-PPRF to this scheme and denote it by $\mathsf{PPRF}_\mathsf{GGM}$.
+
+\section{Designated-Verifier Non-Interactive Zero-Knowledge}
+\label{subsec:dvnizk}
+
+NIZK is a cryptographic primitive that allows a prover to prove that it holds a witness for a certain $\npol$ statement to a verifier in just one message. In the designated-verifier setting, only a designated party can verify the validity of proofs. This is in contrast with standard NIZK where the verification algorithm can be run by any party.
+
+Let $\Zc$ be the set of statements and $\Wc$ be the set of witnesses. Let $\Lc$ be a $\npol$ language with relation $\Rc$ such that $z\in\Lc$ if there is a $w\in\Wc$ such that $\Rc(z,w)=1$.
+
+\begin{definition}[DV-NIZK]
+Let $\Lc$ be a $\npol$ language. A \emph{Designated-Verifier Non-Interactive Zero-Knowledge} (DV-NIZK) for language $\Lc$ is composed by the following algorithms:
+\begin{itemize}
+    \item $\mathsf{GenCRS}_\Lc(1^\lambda)$ takes as input a security parameter. It outputs a common reference string $\crs $ together with the corresponding trapdoor $\td$.
+    \item $\mathsf{Prove}_\Lc(\crs,x,w)$ takes as input a common reference string $\crs$, a statement $x$ and a witness $w$. It outputs a proof $\pi$.
+    \item $\mathsf{Verify}_\Lc(\td,x,\pi)$ takes as input a common reference string $\crs$, a trapdoor $\td$, a statement $x$ and a proof $\pi$. It outputs a bit $b\in\bin$.
+\end{itemize}
+
+
+A DV-NIZK should fulfill the following properties: completeness, soundness and honest-verifier zero-knowledge.
+
+\begin{itemize}
+    \item \textbf{Completeness:} A DV-NIZK is \emph{correct} if for all pairs $(x,w)$ such that $\Rc(x,w)=1$, $$\Pr\left[1\leftarrow\Verify_\Lc(\td,x,\pi):\begin{array}{c}
+     (\crs,\td)\leftarrow\mathsf{GenCRS}_\Lc(1^\lambda)  \\
+    \pi\leftarrow\mathsf{Prove}_\Lc(\crs,x,w)
+\end{array}\right]=1.$$
+\item \textbf{Statistical Reusable Soundness:} A DV-NIZK is \emph{statistical reusable sound} if for all computationally unbounded adversaries $\Ac$ and all $x\notin \Lc$,  $$\Pr\left[1\leftarrow\Verify_\Lc(\td,x,\pi):\begin{array}{c}
+     (\crs,\td)\leftarrow\mathsf{GenCRS}_\Lc(1^\lambda)  \\
+    \pi\leftarrow\Ac^{\Verify_\Lc(\td,\cdot,\cdot)}(\crs,x)
+\end{array}\right]\leq \negl[\lambda].$$ Remark that, in the statistical setting, selective soundness is equivalent to adaptive soundness.
+
+\item \textbf{Zero-knowledge:} A DV-NIZK is said to be \emph{zero-knowledge} if  for all adversaries $\Ac$ there is an simulator $\Sim$ such that $$\left|
+\begin{array}{c}
+\Pr\left[1\leftarrow\Ac(\crs,x,\pi):\begin{array}{c}
+     (\crs,\td)\leftarrow\mathsf{GenCRS}_\Lc(1^\lambda)  \\
+     \pi\leftarrow\mathsf{Prove}_\Lc(\crs,x,w) 
+\end{array}\right] -
+\\ \Pr\left[1\leftarrow\Ac(\crs,x,\pi):\begin{array}{c}
+     (\crs,\td)\leftarrow\mathsf{GenCRS}_\Lc(1^\lambda)  \\
+     \pi\leftarrow\Sim_\Lc(\td,x) 
+\end{array}\right] \end{array}
+\right|\leq \negl[\lambda].$$ When $\Ac$ is computationally bounded, we say that zero knowledge holds computationally. When $\Ac$ is computationally unbounded, if its advantage is negligible in the security parameter, we say that zero-knowledge holds statistically while if its advantage is zero, then zero-knowledge holds perfectly.
+\end{itemize}
+
+\end{definition}
+
+
+\paragraph{Range Proof Systems for DJ Ciphertexts.} In this thesis, we construct a range-proof system for DJ ciphertexts. That is, we build a DV-NIZK scheme that allows the prover to prove that a given DJ ciphertext $\ct$ encrypts a message $m\in [-B, B]$ for some public $B\in\ZZ$. 
+
+Such a scheme can be constructed in the random oracle model (ROM) using the Fiat-Shamir transform  (e.g., \cite{PKC:DamJur01,C:BBCdGL18,SP:BBBPWM18,CCS:TBMDKS20} just to name a few). However, we focus on efficient range proofs in the standard model in this thesis.  
+
+
+\iffalse
+% \section{Quantum Computing and PRF}
+% \subsection{Quantum Basics}
+% We recall some basic facts about quantum computing.
+% 	\begin{fact}[\cite{NieChu00}]\label{fac:qc-basic}
+% 		Any classical efficiently computable function $f$ can be implemented efficiently by a quantum computer. Furthermore, any function that has an efficient classical algorithm computing can be implemented efficiently as a quantum-accessible oracle.
+% 	\end{fact}
+% 	\begin{fact}[\cite{C:Zhandry12}]\label{fac:quantum-queries}
+% 		For any sets $\Xc$ and $\Yc$  we can efficiently `construct' a random oracle from $\Xc$ to $\Yc$ capable of handling $q$ quantum queries, where $q$ is a polynomial. More specifically, the behaviour of any quantum algorithm making at most $q$ queries to a $2q$-wise independent function is identical to its behaviour when the queries are made to a random function.
+% 	\end{fact}
+% %
+% A more formal statement of Fact \ref{fac:quantum-queries} is given in the following.
+% 	\begin{theorem}[\cite{C:Zhandry12}]\label{the:quantum-queries}
+% 		Let $A$ be a quantum algorithm making $q$ quantum queries to an oracle $H:\Xc\to\Yc$. If we draw $H$ from some weight assignment $D$\footnotemark, then for every $z$, the quantity $\Pr_{H\sample D}[A^H(\cdot)=z]$ is a linear combination of the quantities $\Pr_{H\sample D}[H(x_i)=r_i, \forall i\in\{1,\dots,2q\}]$ for all possible settings of the $x_i$ and $r_i$.
+% 	\end{theorem}
+% \footnotetext{A weight assignment on a set $X$ is a function $D: X \to R$ such that $\sum_x D(x) = 1$. As an example, and the way we use it in this thesis, it could model a probability distribution.}
+% This is proved in \cite{C:Zhandry12} and immediately implies that, if two weight assignments on oracles, $D_1$ and $D_2$, are $2q$-wise equivalent, then any $q$ query quantum algorithm behaves the same under both weight assignments since for all $2q$ pairs $(x_i,r_i)$ it holds that
+% $$
+% \Pr_{H\sample D_1}[H(x_i)=r_i,\forall i\in\{1,\dots,2q\}]=\Pr_{H\sample D_2}[H(x_i)=r_i,\forall i\in\{1,\dots,2q\}].
+% $$
+
+
+% \subsection{Pseudorandom Functions}
+% We recall the definition of classical pseudorandom functions \cite{FOCS:GolGolMic84}.
+
+% \begin{definition}[Pseudorandom Functions]\label{def:prf}
+% 	Let $\Xc_\lambda$ and $\Yc_\lambda$ be two finite sets depending on $\lambda$. We say that an efficiently computable keyed function $\PRF: \Kc_\lambda \times \Xc_\lambda \to \Yc_\lambda$ with key-space $\Kc_\lambda$ is a pseudorandom function (PRF) if it holds for every PPT oracle adversary $\Ac$ that $$|\Pr[\Ac^{\PRF(K,\cdot)}(1^\lambda) = 1] - \Pr[\Ac^R(1^\lambda) = 1]| \le \negl,$$ where $K\sample\Kc_\lambda$ and $R:\Xc_\lambda\to\Yc_\lambda$ is a randomly chosen function. Moreover, if $|\Xc| \le \poly$, then we say that $\PRF$ is a small-domain PRF, otherwise we call $\PRF$ a large-domain PRF.
+% \end{definition}
+% %
+% If $\Ac$ is a quantum machine, then we say that the PRF is \emph{post-quantum secure}. Note that $\Ac$ is restricted to issue only classical queries, but its computation can be quantum. We now recall the notion of $q$-bounded PRF \cite{C:DotSch15}. The difference between $q$-bounded PRF and PRF is just the former can only send at most $q$ distinct queries. As in \cite{C:DotSch15}, our only restriction is that the runtime of the function depends polynomially on $\lambda$ and $\log(q)$.
+
+% \begin{definition}[Bounded Pseudorandom Functions]\label{def:bprf}
+% 	Let $\Xc_\lambda$ and $\Yc_\lambda$ be finite sets. A keyed function $F_q: \Kc_q \times \Xc_\lambda\to \Yc_\lambda$ parameterized by a parameter $q$ is a $q$-bounded pseudorandom function (bPRF), if $F_q$ is computable in time $\poly[\lambda, \log(q)]$ and if it holds for all efficiently computable $q^*=q(\lambda)\leq\poly$ and all $q^*$-query distinguishers $\Dc$ (i.e. send at most $q^*$ distinct queries) that 
+% 	$$|\Pr[\Dc^{F_q(K,\cdot)}(1^\lambda)=1]-\Pr[\Dc^R(1^\lambda)= 1]|\leq \negl,$$
+% 	where $K\sample \Kc_q$ and $R:\Xc_\lambda\to\Yc_\lambda$ is a randomly chosen function.
+% \end{definition}
+
+% \subsubsection{Quantum Pseudorandom Functions.} 
+% We define quantum PRFs in the following. Roughly speaking, we say a pseudorandom function $\PRF$ is quantum-secure if no efficient quantum adversary $\Ac$ making quantum queries can distinguish between a random function $R$ and the function $\PRF$. By quantum query, we mean that the adversary $\Ac$ can send a quantum superposition to the oracle and receive the corresponding quantum superposition of the function evaluation in return.
+% \begin{definition}[Quantum-secure Pseudorandom Functions]\label{def:QPRF}
+% 	A pseudorandom function $\PRF: \Kc_\lambda \times \Xc_\lambda \to \Yc_\lambda$ is quantum-secure if no efficient quantum adversary $\Ac$ making quantum queries can distinguish between a truly random function $R$ and the function $\PRF(K,\cdot)$ for a random $K\sample\Kc_\lambda$. Specifically, for the keyed function $\PRF: \Kc_\lambda \times \Xc_\lambda \to \Yc_\lambda$ with key-space $\Kc_\lambda$, we say it is a quantum-secure pseudorandom function  (QPRF) if it holds for every efficient quantum adversary $\Ac$ that $$|\Pr[\Ac^{|\PRF(K,\cdot)\rangle}(1^\lambda) = 1] - \Pr[\Ac^{|R\rangle}(1^\lambda) = 1]| \le \negl,$$ where $K\sample\Kc_\lambda$ and $R:\Xc_\lambda\to\Yc_\lambda$ is a randomly chosen function.
+% \end{definition}
+% We also define the notion of $q$-bounded quantum PRFs in a similar spirit as above.
+
+% \begin{definition}[Bounded Quantum-secure Pseudorandom Functions]\label{def:bQPRF}
+% 	Let $\Xc_\lambda$ and $\Yc_\lambda$ be finite sets. A keyed function $F_q: \Kc_q \times Xc_\lambda\to \Yc_\lambda$ parameterized by a parameter $q$ is a $q$-bounded quantum-secure pseudorandom function (bQPRF), if $F_q$ is computable in time $\poly[\lambda, \log(q)]$ and if it holds for all efficiently computable $q^*=q(\lambda)\leq\poly$ and all $q^*$-query quantum adversary $\Ac$ (i.e. send at most $q^*$ distinct quantum queries) that 
+% 	$$|\Pr[\Ac^{|F_q(K,\cdot)\rangle}(1^\lambda)=1]-\Pr[\Ac^{|R\rangle}(1^\lambda)= 1]|\leq \negl,$$
+% 	where $K\sample K_q$ and $R:\Xc_\lambda\to\Yc_\lambda$ is a randomly chosen function.
+% \end{definition}
+
+\fi
+
+
+\section{Private Information Retrieval}
+Private Information Retrieval (PIR) schemes\cite{FOCS:CGKS95} allow a user to retrieve the $i$-th bit of an $n$-bit database, without revealing to the database holder the value of $i$. Besides, we require an additional privacy property in our schemes: sender privacy (or data privacy)\cite{EC:DiCMalOst00}.
+
+\begin{definition}[PIR]
+A private information retrieval (PIR) scheme $\PIR$ is composed by the following algorithms: %can be defined as a tuple of algorithms $\Pi_{\PIR}=(\query,\send,\retrieve)$:
+\begin{itemize}
+    \item $\query(n,i)$ takes as input an index $i\in [n]$. It outputs a query $\mathsf{q}$ and a state $\mathsf{st}_i$.
+    \item $\send(DB,\mathsf{q})$  takes as input a database $DB\in\bits^n$ and a message $\mathsf{q}$. It outputs a response $\mathsf{r}$.
+    \item $\retrieve(\mathsf{r},\mathsf{st}_i)$ takes as input a response $\mathsf{r}$ and a state $\mathsf{st}_i$. It retrieves the entry $DB_i$.
+\end{itemize}
+
+\end{definition}
+
+\begin{definition}[Correctness]
+A PIR scheme $\mathsf{PIR}$ is said to be correct if 
+for any $n\in \mathbb{N},$ $DB\in\bits^n$ and $i\in[n]$, we have that
+$$
+\Pr\left[DB_i=\retrieve(\mathsf{st_i},\mathsf{r}):\begin{array}{c}
+     (\mathsf{st_i},\mathsf{q})\gets\query(n,i) \\
+    \mathsf{r}\gets\send(DB,\mathsf{q})
+\end{array}\right]=1.
+$$
+\end{definition}
+
+\begin{definition}[User privacy]
+A PIR scheme $\mathsf{PIR}$ is said to be user private if for any PPT adversary $\mathcal{A}$, any $n,\lambda\in \mathbb{N}, DB\in\bits^n$ and $i,j\in[n]$, we have that
+\begin{equation*}
+\left| \begin{array}{c}
+     \Pr[1\gets\mathcal{A}(1^\lambda,DB,\mathsf{q_i}): (\mathsf{st_i,\mathsf{q_i})\gets\query(n,i)}] -  \\
+     \Pr[1\gets\mathcal{A}(1^\lambda,DB,\mathsf{q_j}):(\mathsf{st_j,\mathsf{q_j})\gets\query(n,j)}]
+\end{array} \right|\le \negl[\lambda].
+\end{equation*}
+\end{definition}
+
+
+\begin{definition}[Sender privacy]
+A PIR scheme $\mathsf{PIR}$ is said to be sender private if for any $\lambda\in\NN$, any $n=\poly[\lambda]$, any $i\in[n]$ and any two databases $DB^x,DB^y\in\bin^n$ such that $DB_i^x=DB_i^y$ we have that for all PPT adversaries $\mathcal{A}$
+\begin{equation*}
+\left| \begin{array}{c}
+     \Pr\left[1\gets\mathcal{A}(1^\lambda,i,n,\mathsf{st}_{i},\mathsf{r}_{i}):\begin{array}{c}
+          (\st_i,\quer_i)\gets\query(n,i)  \\
+          \resp_i\gets\send(DB^x,\quer_i)
+     \end{array}\right] -  \\
+      \Pr\left[1\gets\mathcal{A}(1^\lambda,i,n,\st_i,\resp_i):\begin{array}{c}
+           (\st_i,\quer_i)\gets\query(n,i)  \\
+          \resp_i\gets\send(DB^y,\quer_i) 
+      \end{array}\right]
+\end{array}\right |\le \negl[\lambda].
+\end{equation*}
+\end{definition}
+
+Black-box constructions for PIR exist LWE, DDH or QR  assumptions \cite{C:DGIMMO19}.
+
+

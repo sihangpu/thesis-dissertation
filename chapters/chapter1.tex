@@ -1,0 +1,388 @@
+%!TEX root = ../dissertation.tex
+\begin{savequote}[75mm]
+This is a random quote to start off the chapter.
+\qauthor{Firstname lastname}
+\end{savequote}
+
+\chapter{Quantum Random Functions}
+
+\newthought{Quantum pseudorandom functions (QPRFs)} extend the classical security of a PRF by allowing the adversary to issue queries on input superpositions. Zhandry~\cite{FOCS:Zhandry12} showed a separation between the two notions and proved that common construction paradigms are also quantum secure, albeit with a new ad-hoc analysis. In this work, we revisit the question of constructing QPRFs and propose a new method starting from small-domain (classical) PRFs: At the heart of our approach is a new domain-extension technique based on bipartite expanders. Interestingly, our analysis is almost entirely classical.
+
+As a corollary of our main theorem, we obtain the first (approximate) key-homomorphic quantum PRF based on the quantum intractability of the learning with errors problem.
+
+\section{Introduction}
+Pseudorandom functions (PRFs) are one of the fundamental building blocks of modern cryptography. PRFs were introduced in the seminal work of Goldreich, Goldwasser and Micali \cite{FOCS:GolGolMic84} answering the question of how to build a function that is indistinguishable from a random function. Loosely speaking, a PRF guarantees that no efficient algorithm, with oracle access to such a function, can distinguish it from a truly random function. PRFs have been shown to be an invaluable tool in the design of cryptographic primitives (such as block ciphers and message authentication codes) and are by now a well-understood object: After the tree-based construction of \cite{FOCS:GolGolMic84}, PRFs have been build from pseudorandom synthesizers \cite{FOCS:NaoRei95} and directly from many hard problems \cite{FOCS:NaoRei97,STOC:NaoRei97,STOC:NaoReiRos00,PKC:DodYam05,CCS:LewWat09,CCS:BonMonRag10,EC:BanPeiRos12}.
+
+However, when considering the more delicate quantum settings, the study of the hardness of PRFs is still at its infancy. Before delving into the details of this primitive, some clarification is needed as one can define the quantum security of a PRFs in two ways:
+\begin{enumerate}
+\item The PRF is secure against a quantum machine that can only issue classical queries to the function (although the internal state of the adversary is quantum).
+\item The PRF is secure against a quantum machine that is allowed to query it on input superposition states and is given as a response to the superposition of the corresponding outputs, i.e., it can issue \emph{quantum queries}. This setting is the focus of our work and we refer to it as \emph{quantum security}.
+\end{enumerate}
+The first setting is commonly referred to as \emph{post-quantum security} and it involves the use of hard problems that are conjectured to be intractable even for quantum computers, but this aspect typically does not further affect the analysis of known construction paradigms. On the other hand, the latter set has been shown to require a fundamentally different approach: In his pioneer work, Zhandry \cite{FOCS:Zhandry12} gave a separation between the two models, i.e., he constructed a PRF that is post-quantum secure but provably not quantum secure. On the positive side, he showed that the generic constructions of \cite{FOCS:GolGolMic84} and \cite{FOCS:NaoRei95} are also quantum secure, albeit with a completely different analysis. He also provided a quantum analysis of the PRFs of \cite{EC:BanPeiRos12}, which assumes the post-quantum hardness of the learning with errors problem~\cite{STOC:Regev05}. 
+
+Beyond the theoretical interest, quantum security gives a more conservative model to analyze the hardness of PRFs in a world with quantum machines. As an example, if PRF is used as a message authentication code (MAC) by some quantum computer, then it is reasonable to assume that an adversary might be able to obtain the function output when evaluated on some input superposition. In this case, MACs based on post-quantum secure PRFs might not be secure anymore. Boneh and Zhandry in their work\cite{EC:BonZha13} studied this problem and constructed the first message authentication codes against quantum chosen message attack. They also showed that a quantum secure PRF is sufficient for constructing a quantum secure MAC.
+Unfortunately, the current landscape of quantum PRFs is rather unsatisfactory: Current techniques to analyze hardness of PRFs in the quantum settings are geared towards specific constructions. As a result, only a handful of quantum-secure schemes are known. 
+
+\subsection{What Makes QPRFs Challenging?}\label{sec:challenge}
+
+At the heart of Zhandry's separation result~\cite{FOCS:Zhandry12} is the observation that quantum algorithms can detect \emph{hidden linear structures}. This problem is also present when we extend the domain of truly random functions. Assume that $f: \{0,1\}^\secpar \rightarrow \{0,1\}^\secpar$ is a uniformly random function and $H: \{0,1\}^{2 \secpar} \rightarrow \{0,1\}^\secpar$ is a random linear function and therefore a universal hash function~\cite{CW77}. The function $x \mapsto f(H(x))$ can easily be shown to be \emph{statistically indistinguishable} from a truly random function for any classical distinguisher with oracle access to this function. However, using the algorithm of Boneh and Lipton~\cite{C:BonLip95} one can efficiently find elements in the kernel of $H$ via superposition queries to $f(H(\cdot))$. Given an element $z$ in the kernel of $H$, $f(H(x))$ can be distinguished from a truly random function $g: \{0,1\}^{2\secpar} \rightarrow \{0,1\}^\secpar$ by two classical queries, as it holds for any $x \in \{0,1\}^{2\secpar}$ that $f(H(x + z)) = f(H(x))$. Such a collision, however, happens only with an exponentially small probability for a random $g$.
+
+What this shows is that the advantage of superposition adversaries over classical adversaries goes far beyond their computational advantage. Superposition adversaries can learn strictly more about the structure of a function it is given oracle access to than a classical (even unbounded) adversary ever could.
+\subsection{Our Results}
+
+In this work, we explore a different route and propose a new approach to constructing QPRFs. Our construction is based on the framework of D{\"o}ttling and Schr{\"o}der \cite{C:DotSch15}, which in turn builds on earlier ideas of PRF domain extension~\cite{TCC:JaiPieTen12,TCC:BHKN13} and constructions of adaptively secure PRFs from non-adaptively secure ones~\cite{TCC:BerHai12}.
+
+At the heart of our approach is a domain extension technique based on bipartite expander graphs, which crucially allows us to reduce the quantum hardness of our PRF to the classical (post-quantum) hardness of a small-domain PRF. Specifically, we will prove the following theorem.
+
+\begin{theorem}[Informal]
+For any $q$, let $\PRF_q: \Kc \times \Yc \to \Zc$ be a (post-quantum) classically secure PRF with (small) domain $\Yc_q$ and let $\Gamma(x,j)$ be a suitable expander mapping from a vertex $x$ to its $j$-th degree neighbour, where the expander $\Gamma$ has degree $D_i$. Then
+$$
+F(K,x) = \bigoplus_{i=1}^{\omega(\log\lambda)} \bigoplus_{j \in [D_i]}\PRF_{2^i}(K_{2^i}, \Gamma(x,j)),
+$$
+where $K=(K_{2^1},\dots,K_{2^i},\dots,K_{2^{\omega(\log\lambda)} })$\footnotemark, is a quantum PRF.
+\end{theorem}
+%
+ 
+\footnotetext{Note that we could XOR them from $\log\lambda$ to $\omega(\log \lambda)$, but for simplicity, we still use the range from $1$ to $\omega(\log \lambda)$.}
+
+This gives an alternative and (arguably) conceptually simpler approach to constructing QPRFs. An interesting aspect of our result is that our analysis concerns almost exclusively the classical settings and quantum security is achieved by a simple observation: The crux of our analysis will consist in reducing the classical hardness of the PRF to that of a small domain PRF, which is also trivially quantum secure since the attacker can query the full domain. This result can be seen as a compiler which converts any post-quantum secure PRF into a QPRF at a moderate overhead and without having to go through the (expensive) GGM construction of~\cite{FOCS:Zhandry12}.
+
+As an additional result, we obtain a new implication: Assuming the quantum-intractability of the learning with errors problem, then there exists a quantum (almost) key-homomorphic PRF.
+
+\subsubsection{Quantum Key-Homomorphic PRF.} Key-homomorphic PRFs were introduced by Boneh et al. \cite{C:BLMR13} and have applications in the context of proxy-re-encryption and related key security. In a nutshell, for key-homomorphic PRFs the key space is a group and it holds for all $x$ that $\PRF(K_1 + K_2,x) = \PRF(K_1,x) + \PRF(K_2,x)$. Key-homomorphic PRFs give rise to a very natural protocol for a distributed PRF. Boneh et al. showed that the function
+$$
+\PRF_{\mathsf{KH}}(\kn, x) = \left\lceil \prod^\ell_{i=1} \An_{x_i}\cdot \kn \right\rfloor_p,
+$$
+where $\An_0$ and $\An_1$ are two random public matrices in $\ZZ_q^{m\times m}$, is additively key-homomorphic (ignoring a small error) over the vector space $\ZZ_q^m$. The function is pseudorandom under the learning with errors assumption, which is conjectured to be intractable also for quantum computers. Then a simple application of our compiler shows us that
+$$
+F(K,x) = \sum_{i=1}^{\omega(\log\lambda)} \sum_{j\in [D_i]} \PRF_{\mathsf{KH}}(K_{2^i}, \Gamma(x,j)) ~\text{mod }p
+$$
+is a quantum key-homomorphic PRF.
+
+\subsection{Technical Overview}
+We start by providing a technical outline of our results. As mentioned above, we use the framework of~ \cite{C:DotSch15} to construct our QPRFs. This framework has two steps, a domain extension step and a combiner step. The domain extension step takes a \emph{small domain} PRF with domain size $\poly(q)$ and constructs from it a $q$-bounded PRF on a large domain, e.g. $\{0,1\}^\secpar$. A PRF is called $q$-bounded if security is only guaranteed for adversaries which make at most $q$ queries. An important aspect about this step is that the small domain PRF can be evaluated in time (essentially) independent of $q$. 
+
+The second step, or combiner step, combines a small number of bounded PRFs which have the same domain. The key idea here is to set the bounds in an exponentially increasing way. More specifically, if $\PRF_q(K_q,x)$ are $q$-bounded PRFs, we combine them into a function $F$ via
+\[
+F(K,x) = \bigoplus_{i = 1}^t \PRF_{2^i}(K_{2^i},x)
+\]
+where $K = (K_1,\dots,K_{2^t})$.
+We will choose the parameter $t$ to be slightly super-logarithmic in the security parameter $\secpar$. We claim that if $\PRF_q(K_q,x)$ is a $q$-bounded QPRF as long as $q$ is polynomial, then $F(K,x)$ is an (unbounded) QPRF. We will briefly argue how this can be established. Fix a BQP distinguisher $\Ac$ against the QPRF security of $F$. Since this distinguisher is efficient, there is a polynomial upper bound $q$ on the number of superposition queries $\Ac$ will make. Given such a distinguisher we will, choose $i^\ast = \lceil \log(q) \rceil \leq t$ and construct a BQP distinguisher $\Ac'$ against the $2^{i^\ast}$-bounded security of $\PRF_{2^{i^\ast}}$. Notice that since $2^{i^\ast} \leq 2q$ and $q$ is polynomial it holds that $2^{i^\ast}$ is also polynomial. The distinguisher $\Ac'$ gets $q$-bounded superposition access to an oracle $\mathcal{O}$ which computes either $\PRF_{2^{i^\ast}}$ or a uniformly random function $f$. Given a superposition query $\sum |x\rangle$ by $\Ac$, $\Ac'$ submits this query to its oracle $\mathcal{O}$ obtaining a superposition state $\sum |x\rangle |\mathcal{O}(x)\rangle$. Now, $\Ac'$ can convert this state into 
+\[
+\sum |x\rangle |\mathcal{O}(x) \oplus \bigoplus_{i \neq i^\ast} \PRF_{2^i}(K_{2^i},x) \rangle
+\]
+ via a local quantum computation and forwards this state to $\Ac$. In the end, $\Ac'$ outputs whatever $\Ac$ outputs. Now notice that if $\mathcal{O}(\cdot)$ computes $\PRF_{2^{i^\ast}}(K_{2^{i^\ast}},\cdot)$, then $\Ac'$ perfectly simulated superposition access to $F(K,\cdot)$ to $\Ac$. On the other hand, if $\mathcal{O}(\cdot)$ computes a truly random function, then $\mathcal{O}(x) \oplus \bigoplus_{i \neq i^\ast} \PRF_{2^i}(K_{2^i},x)$ is also a truly random function. Consequently, $\Ac'$ distinguishes $\PRF_{2^{i^\ast}}$ from uniform with the same advantage that $\Ac$ distinguishes $F$ from uniform.
+
+
+ The more challenging aspect of our approach is the construction of a $q$-bounded QPRF from a small domain PRF. As outlined in Section~\ref{sec:challenge}, even domain extension techniques that are statistically secure against classical adversaries might be completely insecure against a superposition adversary. We circumnavigate this problem by adopting a \emph{perfectly secure} domain extension technique. We can then use a Lemma by Zhandry~\cite{FOCS:Zhandry12} which states that any classical $2q$-independent function is identically distributed to a uniform function from the view of a $q$-bounded superposition adversary.
+ 
+It turns out that we can realize perfectly secure domain extension using \emph{highly unbalanced expander graphs} via constructions that have previously been used to construct space-efficient $k$-independent functions~\cite{STOC:ChrPagTho15}.
+In a nutshell, a highly unbalanced expander is a bipartite graph $\Gamma$ where the set of left vertices $[N]$ can be made super-polynomially large, the set of right vertices $[L]$ is only polynomially large, and the degree $D$ is poly-logarithmic. Moreover, such graphs have a unique neighbour expansion property in the sense that it holds for any subset $S \subset [N]$ of left-vertices not larger than a (polynomial) bound $Q$ that there exists a vertex $v$ in $\Gamma(S) \subset [L]$ (the neighbourhood of $S$) which has a unique neighbour in $S$. Construction of such graphs was provided by Guruswami, Umans and Vadhan~\cite{GurUmaVad09}.
+
+Equipped with such a graph $\Gamma$, we can now extend a random function $f$ defined on \emph{the small domain} [L] to a $Q$-bounded random function $g$ defined on the large domain $[N]$ as via a simple \emph{tabulation function}. For a left vertex $x \in [N]$ and an index $j \in [D]$, let $\Gamma(x,j) \in [L]$ be the $j$-th neighbor of $x$. Define the function $g$ by
+\[
+g(x) = \bigoplus_{j \in [D]} f(\Gamma(x,j)).
+\]
+We claim that if $f$ is a uniformly random function, then $g$ is a $Q$-wise-independent function, i.e. it holds for any pairwise distinct $x_1,\dots,x_Q \in [N]$ that $g(x_1),\dots,g(x_Q)$ are independent and uniformly random. To see this note that by the unique neighbour expansion property of $\Gamma$, as the set $S = \{x_1,\dots,x_Q\}$ is of size $Q$ there exists a vertex $v \in \Gamma(S)$ which has a unique neighbour $x_{i^*}$ in $S$. In other words, there is an index $j^* \in [D]$ such that the term $f(\Gamma(x_{i^*},j^*))$ only appears in
+\[
+g(x_{i^*}) = \bigoplus_{j \in [D]} f(\Gamma(x_{i^*},j)),
+\]
+but not in any other $g(x_i)$ for $i \neq i^*$. Since $f(\Gamma(x_{i^*},j^*))$ is uniformly random and independent of all the $g(x_i)$, it follows that $g(x_{i^*})$ is uniformly random and independent of all the $g(x_i)$. We can repeat this argument recursively arguing that the $g(x_1),\dots,g(x_Q)$ are uniformly random and independent.
+Now assume that $Q = 2q$. We claim that if $\PRF$ is a post-quantum PRF with (polynomially-sized) domain $[L]$, then it holds that
+\[
+F(K,x) = \bigoplus_{j \in [D]} \PRF(K,\Gamma(x,j))
+\]
+is a $q$-bounded QPRF on the large domain $[N]$. To argue security, assume that $\Ac$ is a $q$-bounded BQP distinguisher which distinguishes $F$ from a truly random function. We will first replace $\PRF$ with a truly random function $f$ and argue security via the post-quantum security of $\PRF$. Specifically, if $\Ac$ could distinguish these two cases we can construct a post-quantum distinguisher $\Ac'$ against the PRF security of $\PRF$. $\Ac'$ is given access to an oracle $\mathcal{O}$ and proceeds as follows. It first queries $\mathcal{O}$ on every possible input obtaining the entire function table of $\mathcal{O}$. This can be performed efficiently as the domain of $\mathcal{O}$ is of size $L$, which is polynomial. Now, $\Ac'$ can give $\Ac$ superposition access to the function $\mathcal{O}'(x) = \bigoplus_{j \in [D]} \mathcal{O}(\Gamma(x,j))$ via a local quantum computation since it knows the entire function table of $\mathcal{O}$. Consequently, if $\Ac$ distinguishes $F(K,x)$ from a function $F'(x) = \bigoplus_{j \in [D]} f(\Gamma(x,j))$ where $f$ is a truly random function, then $\Ac'$ distiguishes $\PRF$ from a truly random function.
+%
+Finally, as $F'(x) = \bigoplus_{j \in [D]} f(\Gamma(x,j))$ is a $2q$-independent function, we can argue that since $\Ac$ is $q$-bounded it is identically distributed to a uniformly random function from the view of $\Ac$ via a Lemma by Zhandry~\cite{FOCS:Zhandry12}. This concludes the overview. 
+
+From a conceptual perspective, the main reason why our proof is simpler than, e.g., Zhandry's proof for QPRF security of the GGM construction~\cite{FOCS:Zhandry12}, stems from the fact that the above reduction $\Ac'$ can query the entire function table of the small domain PRF and simulate a quantum oracle for $\Ac$ locally.
+
+\section{Applications}
+
+In this section, we discuss the possible applications of quantum secure PRFs.
+
+\subsection{Quantum secure MACs}
+Classically, any pseudorandom function can be used to implement message authentication codes (MAC). Moreover, for quantum adversaries, we can use post-quantum secure PRFs to protect classical messages. However, what if the quantum adversary has the ability to query superpositions of messages? In this situation, the entire chosen message game would be held in the quantum environment which needs a stronger version of security. For instance, considering a random oracle $H$, if the adversary can only issue classical queries, after learning $q$ queries she does not learn any additional information at other inputs; but if she can issue quantum queries, then she might get information on all inputs simultaneously, even with just a single query.
+
+Boneh and Zhandry~\cite{EC:BonZha13} defined a quantum-chosen message attack game to model the security of any MAC scheme in the quantum setting.
+First, quantum queries need to be explicitly modelled as the adversary could be entangled with the queries. We denote the adversary's state just prior to issuing a signing query by $\Sigma_{m,x,y} \psi_{m,x,y} |m,x,y\rangle$ and the signing oracle performs the following transformation,
+$$
+\Sigma_{m,x,y} \psi_{m,x,y} |m,x,y\rangle \to \Sigma_{m,x,y} \psi_{m,x,y} |m,x\oplus S(k,m;r),y\rangle,
+$$
+where $r$ is a random string and $S(k,m;r)$ is the signing algorithm of a MAC scheme. Then we say that the adversary wins this game if she can generate $q+1$ valid classical message-tag pairs after issuing $q$ quantum chosen message queries. The formal definition of quantum secure MACs is given as follows \footnotemark.
+
+\footnotetext{Recently, blind-unforgeable, a stronger security notion for qMAC is defined in \cite{EC:AMRS20}. It implies the EUF-qCMA notion and can also be satisfied by quantum secure PRF.}
+
+\begin{definition}
+	A MAC system is existentially unforgeable under a quantum chosen message attack (EUF-qCMA) if no adversary can win the quantum MAC game with a non-negligible advantage in $\lambda$.
+\end{definition}
+
+Boneh and Zhandry~\cite{EC:BonZha13} also showed that a quantum secure pseudorandom function gives rise to the quantum-secure MAC, namely $S(k,m)=\mathsf{PRF}(k,m)$.
+\begin{theorem}[\cite{EC:BonZha13}]\label{the:qprf-qmac}
+	If $\PRF:\Kc \times \Xc \to \Yc$ is a quantum-secure pseudorandom function and $1/|\Yc|$ is negligible, then $S(k,m)=\mathsf{PRF}(k,m)$ is a EUF-qCMA-secure MAC.
+\end{theorem}
+
+Therefore, the theorem \ref{the:qprf-qmac} implies that a quantum secure PRF is sufficient to give us a quantum secure MAC.
+
+\subsection{Pseudorandom Quantum States}
+Pseudorandom states (or pseudorandom quantum states, denoted as PRS), are a set of random states $\{|\phi_k\rangle\}$ that is indistinguishable from Haar random quantum states. In \cite{C:JiLiuSon18}, Ji et al. generalize the definition of pseudorandomness in the classical case to the quantum setting:
+
+\begin{definition}[Pseudorandom states]
+Let $\kappa$ be the security parameter. Let $\mathcal{H}$ be a Hilbert space and $\mathcal{K}$ the key space, both parameterized by $\kappa$. A keyed family of quantum states $\{|\phi_k\rangle \in S(\mathcal{H}_{k\in\mathcal{K}})\}$ is pseudorandom, if the following two conditions hold:
+\begin{enumerate}
+	\item Efficient generation. There is a polynomial-time quantum algorithm $G$ that generates state $|\phi_k\rangle$ on input $k$. That is, for all $k\in\mathcal{K},G(k)=|\phi_k\rangle$.
+	\item Pseudorandomness. Any polynomially many copies of $|\phi_k\rangle$ with the same random $k\in\mathcal{K}$ is computationally indistinguishable from the same number of copies of a Haar random state. More precisely, for any efficient quantum algorithm $\mathcal{A}$ and any $m\in\poly(\kappa)$,
+	$$
+	|\Pr_{k\gets\mathcal{K}}[\mathcal{A}(|\phi_k\rangle^{\otimes m})=1] - \Pr_{|\psi\rangle\gets\mu}[\mathcal{A}(|\psi\rangle^{\otimes m})=1]  |=\negl(\kappa)
+	$$
+	where $\mu$ is the Haar measure on $S(\mathcal{H})$.
+\end{enumerate}
+
+\end{definition}
+
+Moreover, they also show that any quantum secure PRF could be used to construct PRS as follows.
+\begin{theorem}[\cite{C:JiLiuSon18}]
+For any QPRF $\PRF:\Kc \times \Xc \to \Xc$, the family of states $\{ |\phi_k \rangle \}_{k \in \Kc}$,
+$$
+|\phi_k\rangle = \frac{1}{\sqrt{N}}\sum_{x\in\Xc} \omega_N^{\mathsf{PRF}_k(x)}|x\rangle,
+$$
+is a PRS.
+\end{theorem}
+
+Finally, PRS can be immediately used to construct a private-key quantum money scheme~\cite{C:JiLiuSon18}.
+
+
+\section{Bipartite Expanders}
+Expanders are highly connected sparse graphs, which are significantly useful in computer science, and there is a rich body of work on constructions and properties of expanders (see, e.g., \cite{HooLinWig06} and references therein). We recall the definitions of bipartite graphs and expanders in the following.
+
+\begin{definition}[Bipartite Graph]\label{def:bipartite}
+	A bipartite graph with $N$ left-vertices, $L$ right-vertices, and $D$ left-degrees is specified by a function $\Gamma: [N] \times [D]  \rightarrow [L]$, where $\Gamma(x,j)$ denotes the $j$-th neighbor of $x$. For a set $S \subseteq [N]$, we denote as $\Gamma(S)$ its set of neighbors $\{\Gamma(x,j):x\in S, j\in [D]\}$.
+\end{definition}
+
+\begin{definition}[Bipartite Expander]\label{def:expander}
+	A bipartite graph $\Gamma: [N] \times [D]  \rightarrow [L]$ is a $(\leq Q, A)$ expander if for all $S\subseteq [N]$ with $|S|\leq Q$, it has: $|\Gamma(S)| \geq A \cdot |S|$, where $A$ is expansion factor.
+\end{definition}
+%
+We are only interested in highly unbalanced expanders with $N \gg L$. An explicit construction (i.e., where $\Gamma(\cdot,\cdot)$ is computable in polynomial time) of such an expander has been shown in \cite{GurUmaVad09}. We recall here the theorem.
+
+\begin{theorem}[\cite{GurUmaVad09}]\label{the:expander}
+	For all constants $\alpha > 0:$ for every $N\in \NN, Q\leq N$, and $\xi > 0$, there is an explicit $(\leq Q, (1-\xi)D)$ expander $\Gamma: [N]\times [D]\rightarrow[L]$ with degree $D=O\left(((\log N)(\log Q)/\xi)^{1+1/\alpha} \right)$ and $L\leq D^2\cdot Q^{1+\alpha}$. Moreover, $D$ and $L$ are powers of $2$.
+\end{theorem}
+
+\subsection{Q-unique Expanders}
+
+In our construction, we need a $(\leq Q, (1-\xi)D)$ expander to be \textit{Q-unique}, which means in every subset of left-vertices with size not greater than $Q$, there must exist a vertex with a unique neighbour (i.e., this unique neighbour is connected to only one vertex). This property is defined in \cite{STOC:ChrPagTho15} as constructing functions where every subset $S$ of inputs of size at most $Q$ contains an input that has many unique neighbours. It is formalized as:
+\begin{definition}[\textit{Q-unique} Expander]\label{def:q-unique}	
+A $(\leq Q, (1-\xi)D)$ expander $\Gamma:[N]\times[D]\to[L]$ is \textit{Q-unique} if for all $S\subseteq [N], |S|\leq Q$, there exists a $x\in S$ such that $|\Gamma(\{x\})\backslash\Gamma(S\backslash\{x\}) | > l \ge 0$ holds.
+\end{definition}
+Note $l$ in Definition \ref{def:q-unique} is a way to measure \textit{uniqueness} of an expander: The greater the $l$ is, the more unique neighbours an input can have. In our construction, we only need $l=0$ which means (at least) one unique neighbour would be sufficient for us. Moreover, there is also a concept of \textit{Q-wise-independence}:
+\begin{definition}[\textit{Q-wise-independence}]\label{def:Q-wise-independence}
+	Let $Q$ be a positive integer and let $\Fc$ be a family of functions from $\Yc$ to $\Zc$. We say
+that $\Fc$ is a \textit{Q-wise-independent} family of functions if, for every choice of $l \le Q$ distinct keys $y_1,\dots,y_l$ and arbitrary values $z_1,\dots,z_l$, then, for $f$ selected uniformly at random from $\Fc$ we have that
+$$ \Pr[f(y_1)=z_1,\dots,f(y_l)=z_l]=|\Zc|^{-l}.$$
+\end{definition}
+%
+The existence of such \textit{Q-unique} expanders is shown as follows.
+\begin{theorem}\label{the:expander-xi}
+	Given any $(\leq Q, (1-\xi)D)$ expander $\Gamma:[N]\times[D]\rightarrow[L]$ from Definition \ref{def:expander},
+	%and any subset $S\subseteq [N],|S|\leq Q$,
+	if $\xi < 1/2$, then expander $\Gamma$ is \textit{Q-unique} for $l=0$.
+\end{theorem}
+\begin{proof}
+    First, we want to show that there must exist a vertex in $\Gamma(S)$ with a degree at most one, when $\xi < 1/2$. Assume towards contradiction that every vertex in $\Gamma(S)$ has a degree at least $2$ when $\xi < 1/2$. Then the number of edges between $S$ and $\Gamma(S)$ is at least two times as $|\Gamma(S)|$. By Definition \ref{def:bipartite}, we have that
+	\begin{align*}
+        D\cdot |S|   &\geq 2 \cdot |\Gamma(S)|.
+	\end{align*}
+Next, by Definition \ref{def:expander}, we have $|\Gamma(S)| \geq (1 - \xi)D\cdot |S|$ (in which $(1-\xi)D$ is expansion factor), therefore
+	\begin{align*}
+        D\cdot |S|   &\geq 2(1-\xi)D\cdot |S|\\
+		1	 		 &\geq 2(1-\xi)\\
+		\xi	         &\geq 1/2,
+	\end{align*} which is a contradiction since there is $\xi < 1/2$. It follows that if $\xi < 1/2$, then there exists one vertex in $\Gamma(S)$ with a degree less than or equal to $1$. However, we already know that the degree cannot be zero since it's in the neighbour set. Therefore it must be $1$. This completes the proof.
+\end{proof}
+
+Now we will state a useful lemma here. In his seminal paper \cite{Siegel04}, Siegel showed how a \textit{Q-unique} expander can be combined with a small domain random function to obtain a \textit{Q-wise-independent} function. We use a light variation of Siegel's technique here. It is also used by works \cite{FOCS:Thorup13} and \cite{STOC:ChrPagTho15}.
+\begin{lemma}\label{lem:unique-to-independence}
+	Let $\Gamma: [N] \times [D] \to [L]$ be a $Q$-unique expander, let $f: [L] \to \{0,1\}^\secpar$ be a uniformly random function and let $h: [N] \rightarrow \{0,1\}^\secpar$ be defined by
+	\[
+	h(x) = \bigoplus_{j \in [D]} f(\Gamma(x,j)).
+	\]
+	Then $h$ is a $Q$-wise-independent function.
+	%	$h:\bits[d]\times\Yc\to\Zc$ be a simple tabulation function. Then $h\circ\Gamma$ defines a family of $Q$-independent functions. We sample a function from the family by sampling the character tables of $h$.
+\end{lemma}
+%Note that the expander also can be written as $\Gamma:\Xc\to\bits[d]\times\Yc$ such that $h\circ\Gamma$ makes sense. Also, a simple tabulation function $h:\bits[d]\times\Yc\to\Zc$ is defined as
+%$$h(y) = \bigoplus_{j=1}^{2^d} h_j(y_j),$$
+%where each character table $h_j:\Yc\to\Zc$ is a $Q$-independent function as in Definition \ref{def:Q-wise-independence}.
+%HERE 
+
+\subsection{Parameters}
+
+Typically, goals in constructing an unbalanced bipartite expander are to maximize the expansion factor $A$, minimize the degree $D$, and minimize the size $L$ of the right-hand side ($L\leq N$). Although we do not care about the concrete expansion factor $A$ in this work, we still expect a small $L$ (to highly extend domains of PRFs) and a small $D$ (to reduce computational overheads). By Theorem \ref{the:expander} we can fix a domain size $N = 2^\secpar$ and a bound $Q = \poly(\secpar)$ and get an explicit expander $\Gamma: [N] \times [D] \rightarrow [L]$ where $D = \poly(\log(N),\log(Q))$ and $L = \poly(D,Q)$. Consequently, the degree $D$ is essentially independent of $Q$ and $L$ is of size at most polynomial in $Q$.
+
+
+\section{Quantum Pseudorandom Function}
+In this section, we present our construction for a quantum PRF from bipartite expanders. First, we show how to construct a perfectly secure (or \textit{loseless}) domain extender which takes as input a small-domain classical (post-quantum) PRF and outputs a $q$-bounded quantum PRF with the large domain. Second, we show a combiner that turns a family of $q$-bounded quantum PRFs into a standard quantum PRF. Note that our proof of security is tight: If a quantum adversary $\Ac$ can distinguish a quantum PRF $F$ from truly random function $R$ with advantage $\epsilon$, then there exists an adversary $\Ac'$ which can distinguish a small-domain PRF from a truly random function (issuing only classical queries) with the same advantage $\epsilon$.
+
+\subsection{Domain Extension}
+In the following, we present a new domain extension technique based on bipartite expanders. Our compiler is shown below.
+\begin{construction}\label{con:domain-extension}
+	Let $\PRF: \Kc_q \times \Yc \to \Zc$ be a keyed function with key space $\Kc_q$. Let $\Gamma: \bits[\lambda] \times [D] \to \bits[l]$ be a $(\le 2q, (1-\xi)D)$ expander with $\xi\in (0,1/2)$. We define the keyed function $F_q:\Kc_q \times \Xc \to \Zc$ with key space $\Kc_q$ by $$F_q(K,x)=\bigoplus_{j\in [D]} \PRF(K,\Gamma(x,j)),$$ where $K\sample \Kc_q,$ $D=\poly(\lambda), l=\Oc(\log(\lambda)),$ and $\Xc:\bits[\lambda],\Yc:\bits[l],\Zc:\bits[m].$
+\end{construction}
+%
+The following theorem states that the function $F_q$ is  a $q$-bounded quantum PRF.
+
+\begin{theorem}\label{the:domain-extension}
+	Let $\PRF$ and $F_q$ be as in Construction \ref{con:domain-extension}. If $\PRF$ is a post-quantum (classically secure) PRF, then $F_q$ is a $q$-bounded quantum PRF. More specifically, if there exists a $q^*\leq \poly(\lambda)$ and a $q^*$-query quantum adversary $\Ac$ that distinguishes $F_{q^*}$ from a truly random function $R: \Xc\to\Zc$ with advantage $\epsilon$, then there exists an efficient quantum adversary $A'$ with essentially the same runtime as $\Ac$ that distinguish $\PRF$ from a truly random function $R':\Yc \to \Zc$ with advantage at least $\epsilon$.
+\end{theorem}
+%
+Before delving into the proof of the main theorem, we state the following useful lemma. Loosely speaking, we show that if a small-domain PRF is post-quantum secure\footnotemark (where the adversary is allowed to issue only classical queries), then such a PRF is also quantum secure. Intuitively, this holds because an adversary can query classically the full domain of the PRF in polynomial time. We stress that the counterexample of \cite{FOCS:Zhandry12} does not apply in these settings, since we consider only PRFs with small (poly-sized) domains.
+\footnotetext{Any small domain PRF built from symmetric primitives is post-quantum secure as long as underlying symmetric assumptions are post-quantum secure.}
+\begin{lemma}\label{lem:standard-secure-PRF}
+	Let $\PRF$ be a small-domain and post-quantum secure PRF as defined in Definition \ref{def:prf}, then $\PRF$ is also quantum-secure as defined in Definition \ref{def:QPRF}. Specifically, if there exists an efficient quantum adversary $\Ac$ which can make quantum queries to distinguish $\PRF:\Kc \times \Yc \to \Zc$ from truly random function $R:\Yc\to\Zc$ with advantage $\epsilon$, where $|\Yc|\le\poly(\lambda)$, then there exists an efficient quantum adversary $\Ac'$ (with essentially the same runtime as $\Ac$) that can only make classical queries to distinguish from $\PRF$ and $\Rc$ with advantage $\epsilon$.
+\end{lemma}
+\begin{proof}
+	Assume that there exists an efficient (i.e., running in polynomial time) quantum adversary $\Ac$ who is able to distinguish $\PRF$ from a random function $R:\Yc \to \Zc$ with advantage $\epsilon$ (given quantum oracle access to $\PRF$). We can construct a quantum adversary $\Ac'$ that only sends classical queries and breaks the security of $\PRF$ with the same advantage.  From Fact \ref{fac:qc-basic}, any classical efficiently computable function $f$ can be efficiently implemented by quantum computers, thus we are able to efficiently implement a quantum circuit which computes transformation $U_f$ on quantum computers. Specifically, given input states $|x,y\rangle$, where $x$ corresponds to the `data' register and $y$ corresponds to the `target' register, the quantum circuit corresponding to $U_f$ would transform it into $|x,y\oplus f(x)\rangle$, i.e., $U_f |x,y\rangle = |x,y\oplus f(x)\rangle.$ For notational convenience, we also use $U_f |x\rangle$ to denote the state of ``target'' register after passing through the circuit corresponding to $U_f$.
+	\begin{center}
+		\begin{minipage}[t]{0.5\textwidth}
+			\textbf{Quantum Adversary}$\Ac'(1^\lambda)$:\\
+			Obtain function table of $T(x)$ by querying $\Oc'$ classically;\\
+			Construct the quantum circuit corresponding to $U_T$;\\
+			$b'\gets \Ac^{|\Oc(|y\rangle)\rangle}$;\\
+			Output $b'$.
+		\end{minipage}
+		\begin{minipage}[t]{0.5\textwidth}
+			\textbf{Classical Oracle} $\Oc'(x)$:\\
+			Return $T(x)$.
+		\end{minipage}
+		\begin{minipage}[t]{0.5\textwidth}
+			\textbf{Quantum Oracle} $\Oc(|y\rangle)$:\\
+			Return $U_T|y\rangle$.
+		\end{minipage}
+	\end{center}
+	%
+Recall that given the description of $T$, then $U_T$ is efficiently computable. Furthermore, $\Ac'$ issues only polynomially-many queries, since $\PRF$ has a small domain. We can conclude that $\Ac'$ is efficient. Consider the case where $T(x)=\PRF(K,x)$, for uniformly chosen $K\sample\Kc$, then $O$ is identically distributed to $\PRF$. On the other hand, if $T(x)=R(x)$ then $O$ is identically distributed to a truly random function. Thus it holds that
+	\begin{align*}
+	|\Pr[\Ac'^{\PRF(K,\cdot)}(1^\lambda) = 1] - \Pr[\Ac'^R(1^\lambda) = 1]|
+		&= |\Pr[\Ac^{|\PRF(K,\cdot)\rangle}(1^\lambda) = 1] - \Pr[\Ac^{|R\rangle}(1^\lambda) = 1]|\\
+		&= \epsilon,
+	\end{align*}
+	which completes the proof.
+\end{proof}
+	%
+We are now in the position of proving the main theorem of this section.
+\begin{proof}[of Theorem \ref{the:domain-extension}]
+	Let $\Ac$ be a $q$-query quantum adversary with advantage $\epsilon$ against $F_q$. We are going to construct an adversary $\Ac'$ with the same advantage against $\PRF$.
+Consider the following sequence of hybrids.
+	\begin{itemize}
+		\item $\mathsf{\mathbf{Hybrid_0}}$: This is defined exactly as the real experiment where $\Ac$ has oracle access to a function $$F_0(x)=\bigoplus_{j\in [D]} \PRF(K,\Gamma(x,j)),$$ where $K$ is uniformly sampled from $\Kc, x\in\Xc$ and $\Gamma:\Xc\times[D]\to\Yc$ is a $(\leq 2q, (1-\xi)D)$ expander as in Construction \ref{con:domain-extension}. $\Ac$ can send at most $q$ distinct quantum queries.
+
+		\item $\mathsf{\mathbf{Hybrid_1}}$: This experiment is defined as $\mathsf{Hybrid_0}$ except that we replace $\PRF$ with a truly random function $R:\Yc\to\Zc$. That is, the adversary $\Ac$ has oracle access to a function $$F_1(x) = \bigoplus_{j\in [D]} R(\Gamma(x,j)),$$ where $R_j$ is a function uniformly sampled from $\Yc$ to $\Zc$.
+
+		\item $\mathsf{\mathbf{Hybrid_2}}$: This is the ideal experiment where $\Ac$ has oracle access to a truly random function $$F_2(x)=R(x)$$ which is uniformly sampled from $\Xc$ to $\Zc$.
+	\end{itemize}
+%
+	Since $F_0$ and $F_2$ are in real and ideal experiment, respectively, it holds that $$|\Pr[\Ac^{|F_0\rangle}(1^\lambda)=1]-\Pr[\Ac^{|F_2\rangle}(1^\lambda)=1]|=\epsilon.$$ Similarly, we can define two other advantages as: 
+	\begin{align*}
+		|\Pr[\Ac^{|F_0\rangle}(1^\lambda)=1]-\Pr[\Ac^{|F_1\rangle}(1^\lambda)=1]| &= \epsilon_0,\\
+		|\Pr[\Ac^{|F_1\rangle}(1^\lambda)=1]-\Pr[\Ac^{|F_2\rangle}(1^\lambda)=1]| &= \epsilon_1.
+	\end{align*}
+%
+	We first show that $\epsilon_1=0$. By Construction \ref{con:domain-extension} we have $\xi\in(0,1/2)$, thus we know the expander $\Gamma:\bits[\lambda]\times[D]\to\bits[l]$ is \textit{2q-unique} by Theorem \ref{the:expander-xi}. By Lemma \ref{lem:unique-to-independence}, we know that for all distinct $(x_1, \dots, x_{2q}) \in \Xc^{2q}$, the outputs $F_1(x_1),\dots, F_1(x_{2q})$ are distributed independently and uniformly at random, that is, $Pr[F_1(x_1)=r_1,\dots, F_1(x_{2q})=r_{2q}]$ equals to $2^{-2qm}$.
+
+	%For each $x_i\in \{x_1,\dots,x_{2q}\}$, it is clear that its output $F_1(x_i)$ is distributed uniformly since $R(\Gamma(x_i,j))$ is a uniformly random function. Recall that $\Gamma$ is a \textit{2q-unique} expander and $\Zc=\bits[m]$. Then, given a pair $(S,\Gamma(S)):S=\{x_1,\dots,x_{2q}\}$, there must exist a vertex $x_{i^*}\in S$ which has a unique neighbor vertex $y_{i^*}$. Then for all $ r_i\in \bits[m]$ we have:
+	%\begin{align}
+	%	\Pr[F_1(x_1)=r_1,\dots,F_1(x_{2q})=r_{2q}] 
+	%	&= \Pr[\forall i\neq i^*:F_1(x_i)=r_i |F_1(x_j)=r_{i*}] \cdot \Pr[F_1(x_{i^*})=r_{i^*}]\nonumber\\
+	%	&= \Pr[\forall i\neq i^*:F_1(x_i)=r_i] \cdot \Pr[F_1(x_{i^*})=r_{i^*}],\label{ali:independence}\\
+	%	&= \Pr[\forall i\neq i^*:F_1(x_i)=r_i] \cdot 2^{-m}\nonumber\\
+	%	&\mathrel{\makebox[\widthof{=}]{\vdots}} \nonumber \\
+	%	&= 2^{-2qm}\label{ali:uniformly}.
+	%\end{align}
+	%Note that Equation (\ref{ali:independence}) holds because $y_{i*}$ is unique among $\Gamma(x_i,j)$ (for all $i$ and $j$). Expanding the equation (i.e., removing the $x_{i^*}$ with a unique neighbour in each iteration), we obtain that $F_1(x_1),\dots, F_1(x_{2q})$ are uniformly distributed by Equation (\ref{ali:uniformly}). 
+	
+	Then by Theorem \ref{the:quantum-queries}, we have 
+	$$\Pr[\Ac^{|F_1\rangle}(1^\lambda)=1] = \Pr[\Ac^{|F_2\rangle}(1^\lambda)=1],$$
+	since for all $2q$ pairs $(x_i, r_i),$ it holds that 
+	\begin{align*}
+		\Pr[F_1(x_i)=r_i,\forall i\in\{1,\dots,2q\}]
+		&=2^{-2qm}\\
+		&=\Pr[F_2(x_i)=r_i,\forall i\in\{1,\dots,2q\}].
+	\end{align*}
+	This means that $\epsilon_1=0$. By triangle inequality we have
+	\begin{align*}
+		\epsilon_0
+		&= |\Pr[\Ac^{|F_0\rangle}(1^\lambda)=1]-\Pr[\Ac^{|F_1\rangle}(1^\lambda)=1]|\\
+		&\ge |\Pr[\Ac^{|F_0\rangle}(1^\lambda)=1]-\Pr[\Ac^{|F_2\rangle}(1^\lambda)=1]| - |\Pr[\Ac^{|F_1\rangle}(1^\lambda)=1]-\Pr[\Ac^{|F_2\rangle}(1^\lambda)=1]| \\
+		&= \epsilon - \epsilon_1\\
+		&= \epsilon.
+	\end{align*}
+%
+We are left with constructing an adversary that can distinguish a small-domain PRF from a truly random function with advantage $\epsilon_0$. First, we allow such an adversary to issue quantum oracle queries. Since we could use Toffoli gates to simulate any classical circuits in quantum settings, without losing generality, let $U_\oplus$ be a quantum circuit to compute $U_\oplus|x_1,\dots,x_{D},y\rangle \to |x_1,\dots,x_{D},y+(x_1\oplus\dots\oplus x_{D})\rangle$ and $U_{\Gamma_j}$ be another one to compute $U_{\Gamma_j}|x,y\rangle\to|x,y+\Gamma(x,j)\rangle.$ The adversary $\Ac''$ is defined in the following.
+	\begin{center}
+		\begin{minipage}[t]{0.5\textwidth}
+			\textbf{Quantum Adversary} $\Ac''(1^\lambda)$: \\
+			For each $j\in[D]$ construct the circuit $U_{\Gamma_j}$;\\
+			$b'\gets \Ac^{|\Oc(|x\rangle)\rangle}$;\\
+			Output $b'$.
+		\end{minipage}
+		\begin{minipage}[t]{0.5\textwidth}
+			\textbf{Quantum Oracle} $\Oc''(|x\rangle)$: \\
+			Return $U_T|x\rangle$.
+		\end{minipage}
+		\begin{minipage}[t]{0.5\textwidth}
+			\textbf{Quantum Oracle} $\Oc(|x\rangle)$: \\
+			Return $U_\oplus|\Oc''(U_{\Gamma_1}|x\rangle),\dots,\Oc''(U_{\Gamma_{{D}}}|x\rangle)\rangle$.
+		\end{minipage}
+	\end{center}
+%
+Note that $\Ac$ makes at most $q$ distinct quantum queries ($q\le \poly(\lambda)$), thus $\Ac''$ is an efficient quantum adversary running in polynomial time. First assume that $T(x)=\PRF(K,x)$ for $K\sample\Kc_q$, then the oracle $\Oc$ in $\Ac''$'s simulation is identically distributed to $F_0(x)$. On the other hand, if $T(x)=R(x)$ is a uniformly random function, $\Oc$ computes $\bigoplus^{D}_{j=1} R(\Gamma(x,j))$ which is $F_1$. Therefore we have
+	\begin{align*}
+		|\Pr[{\Ac''}^{|\PRF(K,\cdot)\rangle}(1^\lambda)=1]-\Pr[{\Ac''}^{|R(\cdot)\rangle}(1^\lambda)=1]|
+			&= |\Pr[\Ac^{|F_0\rangle}(1^\lambda)=1]-\Pr[\Ac^{|F_1\rangle}(1^\lambda)=1]|\\
+			&= \epsilon_0 \\
+			&\ge \epsilon.
+	\end{align*}
+%
+By Lemma  \ref{lem:standard-secure-PRF} we know that there exists an adversary $\Ac'$ with the same advantage $\epsilon$, which issues only classical queries since the PRF has a small (poly-sized) domain. This completes the proof.
+\end{proof}
+
+	
+\subsection{Unbounded Queries}
+	Finally, we show that the combiner of \cite{C:DotSch15} allows us to remove the restriction on the query bound of our quantum PRF. The innovation of our paper is that we lift the analysis to the quantum settings.
+
+	\begin{construction}\label{con:combiner}
+		Let $\omega(\log(\lambda))$ be a slightly super-logarithmic upper bound. For a given parameter $q$, let $F_q:\Kc_q\times\Xc\to\Zc$ be a keyed function with corresponding key space $\Kc_q$. Define the function $F:\Kc\times\Xc\to\Zc$ with key space $\Kc=\prod^{\omega(\log(\lambda))}_{i=1}\Kc_{2^i}$ by $$F(K,x)=\bigoplus^{\omega(\log(\lambda))}_{i=1}F_{2^i}(K_{2^i},x),$$ where $K_{2^i}\sample\Kc_{2^i}$ for $i=1,\dots,\omega(\log(\lambda))$ and $K=(K_{2^i})_{i=1,\dots,\omega(\log(\lambda))}$.
+	\end{construction}
+
+	\begin{theorem}\label{the:combiner}
+		Let $F_q$ and $F$ be as in Construction \ref{con:combiner}. If $F_q$ is a $q$-bounded quantum PRF, then $F$ is a quantum PRF. Specifically, if $\Ac$ is an efficient quantum adversary against $F$ with advantage $\epsilon$ that makes at most $q' =\poly(\lambda)$ distinct quantum queries, then there exists an $q^*$-query quantum adversary $\Ac'$ (with essentially the same runtime as $\Ac$) with advantage $\epsilon$ against $F_{q^*}$, where $q^*=2^{\lceil\log(q')\rceil}\le 2q' = \poly(\lambda)$.
+	\end{theorem}
+	
+	\begin{proof}
+	Let $\Ac$ be an efficient quantum adversary which can send quantum superpositions to distinguish $F$ from a truly random function $R$ with advantage $\epsilon$, then we can construct an efficient $q^*$-query quantum adversary $\Ac'$ to distinguish $F_{q}$ from $R$ for some $q$. Since $q'=\poly(\lambda)$, we have $\log(q')\le \omega(\log(\lambda))$ thus $2^{1} \le q^*=2^{\lceil\log(q')\rceil}\le \poly(\lambda)< 2^{\omega(\log(\lambda))}$ for sufficient large $\lambda$.
+		\begin{center}
+			\begin{minipage}[t]{0.5\textwidth}
+				\textbf{Bounded Quantum Adversary} $\Ac'(1^\lambda)$: \\
+				Set $i^*$ as $\lceil\log(q')\rceil$;\\
+				Generate $K_{2^i}$ for $i\in\{1,\dots,\omega(\log(\lambda))\}\backslash i^*$;\\
+				$b'\gets \Ac^{|\Oc(|x\rangle)\rangle}$;\\
+				Output $b'$.
+			\end{minipage}
+			\begin{minipage}[t]{0.5\textwidth}
+				\textbf{Quantum oracle} $\Oc'(|x\rangle)$: \\
+				Return $U_T|x\rangle$.
+			\end{minipage}
+			\begin{minipage}[t]{0.5\textwidth}
+				\textbf{Quantum oracle} $\Oc(|x\rangle)$: \\
+				Return $U_\oplus|F_{2^{1}},\dots \Oc'(|x\rangle), \dots F_{2^{\omega(\log(\lambda))}}\rangle$.%\\
+			\end{minipage}
+		\end{center}
+	Where $\Oc'(|x\rangle)$ is the $i^*$-th element in $\{1,\dots,\omega(\log(\lambda))\}$ and we write $F_{2^{i}}(K_{i},x)$ as $F_{2^{i}}$ to simplify the notation. Observe that $q'\le 2^{\lceil\log(q')\rceil} = q^*\le \poly(\lambda)$ thus $\Ac'$ is able to run $\Ac$ as a black box and $q'$ queries can be handled by $\Ac'$. Then we consider distributions of different $T(x)$. If $T(x)=F_{2^{i^*}}(K,x)$ for uniformly randomized $K\sample\Kc_{2^{i^*}}$, then oracle $\Oc$ is identically distributed to $F(K,x)$ for $K\sample\Kc$. Otherwise, if $T(x)=R(x)$, then the distribution of oracle $\Oc$ should be uniform since $O'$ and other $F_{2^i}$ are independent, thus it will be identically distributed to $R(x)$. Therefore it holds that
+	\begin{align*}
+	|\Pr[\Ac'^{|F_{2^{i^*}}\rangle}(1^\lambda)=1] - \Pr[\Ac'^{|R\rangle}(1^\lambda)=1]|
+		&= |\Pr[\Ac^{|F\rangle}(1^\lambda)=1]-\Pr[\Ac^{|R\rangle}(1^\lambda)=1]|\\
+		&= \epsilon.
+	\end{align*}
+	which completes the proof.
+	\end{proof}

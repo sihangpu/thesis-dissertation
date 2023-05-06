@@ -1,0 +1,1589 @@
+% %!TEX root = ../dissertation.tex
+% % \begin{savequote}[75mm]
+% % say some words.
+% % \qauthor{Quoteauthor Lastname}
+% % \end{savequote}
+
+\chapter{Privacy Preserving Signatures}
+\label{sec:ssig}
+\newthought{In this chapter}, we initiate our discussion on the final problem in privacy-preserving computation that we address, which is related to the communication bandwidth and computational overhead of a privacy-preserving signature scheme, referred to as stealth signatures. In contrast to previous chapters, our primary focus here is on enhancing the \emph{concrete} efficiency and bandwidth of the underlying scheme.
+
+Existing stealth signature mechanisms either (1) exhibit security vulnerabilities in certain reasonable adversarial models or (2) demonstrate inefficiency in practical scenarios. In this chapter, we provide a formalization of \emph{stealth signatures} through game-based definitions.
+We then introduce $\name$, the first efficient post-quantum secure stealth signature construction based on NIST standardized signature and key-encapsulation schemes, Dilithium and Kyber. The basic form of $\name$ is secure only in a \emph{weak} security model; however, we provide an efficiency-preserving and generic transform that \emph{boosts} the security of $\name$ to ensure the strongest security notion defined in this chapter. Compared to the state-of-the-art, our approach offers a $\sim 3.37$x improvement in signature size while maintaining signing and verification efficiency at around $0.2$ ms.
+
+We enhance $\name$ by incorporating a \emph{fuzzy tracking} functionality, allowing recipients to delegate the task of monitoring incoming transactions to a tracking server while upholding an anonymity notion similar to fuzzy message detection (FMD), which was recently introduced in \cite{CCS:BLMG21}. Additionally, we extend $\name$ with a novel fuzzy tracking framework called \emph{scalable fuzzy tracking}, introduced in this chapter. This framework can be viewed as a counterpart to FMD, as it reduces the tracking server's computational workload to \emph{sublinear} levels in the number of users, in contrast to FMD's linear workload. Experimental results demonstrate that, for millions of users, the server only requires $3.4$ ms to filter each incoming message, representing at least a $\sim 76,000$x improvement over existing methods.
+
+\section{Overview}
+
+Cryptocurrency payments have revolutionized payment infrastructures by overcoming the need for a central authority and allowing for public verifiability.
+
+On a very high level, cryptocurrency payments are made from a sender to a receiver, by posting a transaction onto a public ledger called \emph{blockchain}.
+In the most basic form, the sender and receiver are identified by respective public keys (or addresses), and a transaction is authorized by the sender via a digital signature on the transaction wrt. the public key of the sender.
+
+This paradigm allows users to make payments to any other user in the system without having to rely on banks, international money transfers- or exchange services.
+E-commerce~\cite{ecommerce}, donation platforms~\cite{donation1,donation2,donation3}, gaming platforms~\cite{egaming}, etc., are just some of the  popular use cases that are enabled by cryptocurrencies and their trustless payments. 
+For example, donation platforms accept donations in the form of cryptocurrency payments, and to do this, a donation platform announces its addresses and users can make transactions paying to these addresses without requiring permission from any authority.
+
+For transactions that want some level of anonymity, a critical weakness of the above paradigm is that it lacks reliable anonymity guarantees in its basic form. Several de-anonymization techniques~\cite{receiver1,receiver2,receiver3,receiver4,moser2017empirical} have been demonstrated that link addresses on the blockchain to the real-world entities that own them.
+While de-anonymization of transactions may be beneficial in cases of preventing crimes such as money laundering, it has also led to questionable forms of censorship~\cite{freedom-convoy}. Combined with the public nature of blockchains, this also raises concerns about user privacy in general. 
+
+A mechanism known as \emph{stealth addresses}~\cite{stealth1,stealth2,stealth3,courtois2017stealth} was developed to address these anonymity issues. In the donation platform example above, the platform publishes a single master address, a so-called \emph{stealth address}, and any user can send payments to the platform, by using a \emph{locally re-randomized} version of the stealth address called one-time address. On one hand, such a one-time address is \emph{unlinkable} to the stealth address for any outside observer, consequently, transactions to such a stealth address look as if they are going to random recipients (and not necessarily the donation platform). On the other hand, with access to its master secret, the donation platform can link such a one-time address to its stealth address and further generate the corresponding one-time secret locally, on the fly. Using this one-time secret, the coins associated with the one-time address can be spent.
+
+
+The stealth address mechanism proposed in~\cite{stealth2} has in fact been deployed in many of the major currencies like Bitcoin~\cite{stealth1}, Ethereum~\cite{umbra}, and Monero~\cite{stealth2}.
+The mechanism has further found direct application in privacy enhancement of payment protocols like Blitz~\cite{USENIX:AMKM21}.
+
+As~\cite{stealth2} implements stealth addresses via signature schemes, we will refer to the cryptographic abstraction of the mechanism from~\cite{stealth2} as \emph{stealth signatures}. Thus we will henceforth use the terms addresses and public keys interchangeably.
+
+Notice that in the mechanism described above, the recipient only needs to publish its master address, and \emph{does not} need to give out fresh unlinkable addresses for each potential sender. As the number of senders could well be in the hundreds or thousands (as is the case with e-commerce, donations, etc.), stealth signatures lead to a \emph{scalable solution}.
+
+Recent academic works~\cite{EUROSP:LYWNW19,ESORICS:LLNYY20} initiated the formal treatment of stealth signatures with cryptographic security guarantees. They observed that the construction of~\cite{stealth2} does not satisfy security under so-called \emph{key-exposures}. Roughly, this means that if an adversary learns the corresponding one-time secret key for the one-time public keys that he generated, then he can potentially learn all one-time secret keys of all one-time public keys that he generates for this particular master address.
+
+More recent proposals of stealth signature schemes~\cite{EUROSP:LYWNW19,ESORICS:LLNYY20} were designed to be secure against such key-exposure attacks, with the downside that their schemes use heavy tools such as pairings~\cite{C:BonFra01} or lattice basis delegation~\cite{EC:AgrBonBoy10}. These are currently not compatible with any of the major cryptocurrencies that exist today. Furthermore, with the threat of quantum computers looming large, cryptocurrency payments including the \emph{pre-quantum} stealth signature mechanisms of~\cite{stealth2,EUROSP:LYWNW19} remain vulnerable. While a lattice-based (and thus plausibly post-quantum) construction of stealth signatures was proposed in~\cite{ESORICS:LLNYY20}, this construction relies on the aforementioned lattice basis delegation. Consequently, their scheme is most likely too inefficient for practical use\footnotemark. We compare our constructions and related works in~\cref{tab:ss-comparison-prior-works}. Please refer to~\cref{sec:implement} for more discussion.
+
+\footnotetext{As the authors of \cite{ESORICS:LLNYY20} point out in Section 1.1, their ``public key and signature sizes are too large for practical use''.}
+ 
+
+
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.2}
+\caption{Comparison with Prior Works about Stealth Signatures}
+\label{tab:ss-comparison-prior-works}
+\centering
+\begin{threeparttable}  
+\resizebox{\columnwidth}{!}{\begin{tabular}{r  c rcrr}
+
+\toprule
+Works & w/\sf KE\tnotex{tn:wke} & Security & Post-quantum  & $\opk$ Size & Signature Size \\
+\midrule
+Monero's SS\cite{stealth2} & \cellcolor{red!15}$\circ$ & $\seufcma$  & \cellcolor{red!15}$\circ$ & 64 B & 64 B  \\
+
+Paring-based SS\cite{EUROSP:LYWNW19} & $\bullet$ & \cellcolor{yellow!15}$\eufcma$  & \cellcolor{red!15}$\circ$ & \cellcolor{yellow!15}231 B & \cellcolor{yellow!15}115 B \\
+
+ABB10-based SS\cite{ESORICS:LLNYY20} & $\bullet$ & \cellcolor{yellow!15}$\eufcma$&  $\bullet$ & \cellcolor{red!15}3.35 GB & \cellcolor{red!15}3.26 MB \\
+
+\cite{ESORICS:LLNYY20} + NTRU (potential optimization) & $\bullet$ &\cellcolor{yellow!15}$\eufcma$ &$\bullet$ & \cellcolor{red!15}13.82 KB & \cellcolor{red!15}13.82 KB \\
+\midrule
+\cref{sec:group-bounded} & \cellcolor{yellow!15}$\circbullet$\tnotex{tn:bounded} & $\seufcma$  & \cellcolor{red!15}$\circ$ & 96 B & 64 B \\
+
+\cref{sec:ss-lattice} & \cellcolor{red!15}$\circ$ & \cellcolor{yellow!15}$\eufcma$ & $\bullet$ & 2.08 KB & 2.54 KB\\
+
+\cref{sec:ss-lattice}+Dilithium (compiler from~\cref{sec:compiler}) & $\bullet$ & $\seufcma$ & $\bullet$ & 2.08 KB & \cellcolor{yellow!15}6.40 KB \\
+
+\cref{sec:ss-lattice}+Falcon (compiler from~\cref{sec:compiler}) & $\bullet$ & $\seufcma$ & $\bullet$ & 2.08 KB & 4.09 KB \\
+\bottomrule
+\end{tabular}}
+\begin{tablenotes}
+\scriptsize 
+\item[1] \label{tn:wke} Secure against key-exposures. Our construction presented in~\cref{sec:ss-lattice} can be upgraded to w/\textsf{KE} according to~\cref{sec:compiler}.
+\item[2] \label{tn:bounded} Secure against bounded key-exposures.
+\end{tablenotes}
+\end{threeparttable}  
+\end{table}
+
+
+\begin{table}[!t]
+\renewcommand{\arraystretch}{1.2}
+\caption{Comparison with Prior Works about Fuzzy/Private Tracking}
+\label{tab:fuzzy-comparison-prior-works}
+\centering
+\begin{threeparttable}
+\resizebox{\columnwidth}{!}{\begin{tabular}{r  cc c crc}
+\toprule
+Works & Privacy  & Assumptions & Post-quantum  & Server's Work & Latency/msg\tnotex{tn:time} & Receiver's Time\\
+\midrule
+$\fmd_2$\cite{CCS:BLMG21} & \cellcolor{yellow!15}$\rho N$-anonymity\tnotex{tn:rhoN} & \cellcolor{yellow!15}Random Oracle & \cellcolor{red!15}$\circ$ & \cellcolor{red!15}$O(N)$ & \cellcolor{red!15}933 sec &  37.5 ms\\
+
+$\Pi_\msf{TEE}$\cite{USENIX:MSSSV22} & Full Privacy & \cellcolor{red!15}Trusted Execute Environment & \cellcolor{red!15}$\circ$ & \cellcolor{red!15}$O(N)$ & \cellcolor{red!15}228 sec &  12 ms\\
+
+$\Pi_\msf{GC}$\cite{USENIX:MSSSV22} & Full Privacy & \cellcolor{red!15}Two Non-colluding Servers & \cellcolor{yellow!15}$\circbullet$ & \cellcolor{red!15}$O(N)$ & \cellcolor{red!15}81.1 hour & 1 ms\\
+
+$\msf{OMR_{p2}}$\cite{C:LiuTro22} & Full Privacy & \cellcolor{red!15}Fully Homomorphic Encryption & $\bullet$ & \cellcolor{red!15}$O(N)$ & \cellcolor{red!15}43.1 hour & 63 ms\\
+\midrule
+\cref{sec:ss-lattice-fuzzy} & \cellcolor{yellow!15}$\rho N$-anonymity & Standard Model & $\bullet$ & \cellcolor{red!15}$O(N)$ & \cellcolor{yellow!15}11.70 sec &  37.5 ms\\
+
+\cref{sec:ss-lattice-fuzzy*} & \cellcolor{yellow!15}$\rho N$-anonymity & \cellcolor{yellow!15}Random Oracle &  $\bullet$ & $O(\rho N)$ & 3.42 ms &  37.5 ms\\
+\bottomrule
+\end{tabular}}
+\begin{tablenotes}
+\scriptsize 
+\item[1] \label{tn:rhoN} $\rho$ denotes the false-positive rate and $N$ the number of clients.
+\item[2] \label{tn:time} Calculated in a setting with $N=2^{20}$ users and $M=500,000$ messages based on the numbers from their papers.\\
+Latency per message induced by the server. See more discussion in~\cref{sec:implement}.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+this chapter is motivated by the following two questions:
+\begin{itemize}[leftmargin=*]
+    \item \emph{Can we have an efficient stealth signature scheme with security against unbounded key-exposures, that is compatible with Schnorr, ECDSA and other group-based signature schemes predominantly used in currencies today?}
+    \item \emph{Can we have an efficient stealth signature scheme secure with unbounded key exposure that is post-quantum secure?}
+\end{itemize}
+
+A caveat of the stealth address mechanism described above is that a recipient (online or offline) has to parse through a large number (hundreds of thousands per day) of transactions to identify those that send coins to one-time addresses corresponding to his master address.
+
+A workaround was proposed in~\cite{stealth2}, where a recipient can \emph{delegate} identification of incoming payments to a semi-trusted third-party server called the \emph{tracking server}. To do so, the recipient can generate a so-called \emph{tracking key} from his secret key and provide it to the tracking server. The tracking key allows the tracking server to identify or \emph{track} all incoming payments to the recipient using the tracking key, and later notify the recipient of these exact payments. On the other hand, such a tracking key should not enable the tracking server to generate one-time secrets for the concerned one-time addresses. Prior works~\cite{EUROSP:LYWNW19,ESORICS:LLNYY20} omit this tracking functionality in their formalization of stealth signatures.
+
+A downside of the above tracking method is that the tracking server learns \emph{exactly} which payments are addressed to the recipient, thus providing a tracking key to a server amounts to fully giving up on anonymity/unlinkability with respect to the tracking server. While there is a natural and obvious tension between the anonymity goal of unlinkability and the functional goal of trackability, a recent work by Beck et al.~\cite{CCS:BLMG21} attempts to strike a balance between these notions. They introduce the concept of \emph{fuzzy message detection (FMD)}, where a tracking server can \emph{approximately} detect messages meant for a recipient with an adjustable degree of uncertainty. More specifically, their notion of detection is \emph{fuzzy} in the sense that messages meant for the recipient are always correctly identified, but there is a recipient-controlled false positive rate (baked into the \emph{fuzzy} tracking key) which causes messages meant for other users to be misclassified as being meant for the recipient. 
+
+Thus, the tracking server cannot decide with certainty if a detected message is actually intended for the recipient or not.
+This mechanism makes it necessary for the sender of the message to include additional \emph{fuzzy tracking information} and the tracking server possesses a fuzzy tracking key. Together, fuzzy tracking information and fuzzy tracking key enable fuzzy tracking.
+ In principle, applying their technique to enable fuzzy tracking of one-time addresses in stealth signatures is fairly straightforward. However, relying on their schemes comes with considerable drawbacks. While their first scheme ($\fmd_2$) is efficient, it relies on the pre-quantum DDH assumption. Their second scheme ($\fmd_{\msf{frac}}$) relies on garbled circuits as an additional component and is hence plausibly post-quantum. But the garbled circuits included in the ciphertext lead to an unacceptable size blowup of the sender's message. On the other hand, there are signalling detection or retrieval schemes~\cite{USENIX:MSSSV22, C:LiuTro22} for fully private tracking instead of fuzzy tracking, but all of them require linear work at the server side which doesn't scale to thousands or millions of users. We discuss their schemes and ours in~\cref{sec:implement} and present a comparison about this in~\cref{tab:fuzzy-comparison-prior-works}.
+
+This leads us to the following question:
+\begin{itemize}[leftmargin=*]
+    \item \emph{Can we have a stealth signature scheme with efficient fuzzy tracking in the post-quantum setting and scalable to hundreds of thousands (or even millions) of users?}
+\end{itemize}
+
+\subsection{Our Contributions}
+We summarize our contributions below.
+
+\smallskip\noindent\textbf{Clear Constructions.} We introduce \name\ (in~\cref{sec:ss-lattice}), the first practically efficient post-quantum secure stealth signature scheme secure without key exposure.
+Towards this goal, we consider the Dilithium~\cite{NISTPQC-R3:CRYSTALS-DILITHIUM20} signature scheme which is lattice-based and a winner of the NIST competition. Without changing the signature scheme in any way, we augment Dilithium with additional algorithms to obtain \name\ so that it now supports one-time key derivations and tracking. One of the main motivations for considering Dilithium is that we believe it is one of the most popular and most likely post-quantum signature schemes to be adopted into cryptocurrencies for the authentication of payments. 
+
+Next, we show how one can generically transform (in \cref{sec:compiler}) a stealth signature scheme that is secure \emph{without} key-exposure into a scheme that is secure \emph{with} unbounded key-exposure.
+
+Thus we can transform \name\ into one that is practically efficient and secure with an unbounded key exposure. Both \name\ and the transformed construction are compatible with cryptocurrencies that would support Dilithium signature verification. Moreover, we do not require any additional support from the scripting language of cryptocurrency.
+
+
+Furthermore, we construct a stealth signature scheme (in~\cref{sec:group-bounded}) that is compatible with group-based schemes like Schnorr and ECDSA which are used in most of the currencies today. 
+However, it only guarantees security with \emph{bounded} key-exposure: It tolerates a-priori number of one-time secret key leakage.
+
+
+\smallskip\noindent\textbf{Fuzzy Constructions.} We then present two fuzzy stealth signature schemes (using \name), both of which are the first efficient and post-quantum candidates.
+
+In the first construction (in~\cref{sec:ss-lattice-fuzzy}), we take a similar approach as $\fmd$ from~\cite{CCS:BLMG21}. 
+But we reduce its overhead from $O(\secpar)$ to $1$ bit per signal by making novel use of ciphertext compression techniques~\cite{TCC:BDGM19}. 
+Additionally, we show how to allow \emph{finer} false-positive rates without requiring garbled circuits as in~\cite{CCS:BLMG21}.
+
+
+We then present a new \emph{scalable} framework for fuzzy tracking (in~\cref{sec:fuzzy*-ss}) followed by an efficient construction (in~\cref{sec:ss-lattice-fuzzy*}) in the random oracle model.
+This framework can be viewed as a `dual' version of the $\fmd$ mechanism from~\cite{CCS:BLMG21}. 
+
+Intuitively, it is a trade-off between efficiency and usability: By limiting the users' ability to choose false-positive rates, we are able to reduce the tracking server's computational work to \emph{sublinear} in the total number of users. This compares very favourably with prior works, where the server needs to take a linear scan of each user's tracking key~\cite{CCS:BLMG21,USENIX:MSSSV22,C:LiuTro22}. 
+%We provide an efficient construction (in~\cref{sec:ss-lattice-fuzzy*}) of fuzzy \emph{scalable} stealth signatures in the random oracle model.
+
+\smallskip\noindent\textbf{Implementation.}
+We implemented $\name$, post-quantum FMD, and scalable fuzzy tracking based on Dilithium, Kyber, and Falcon with anonymized open-source code~\cite{implementation}. We test them with different parameter sets on an ordinary laptop as presented  in~\cref{tab:implementation} and~\cref{tab:implementation-fuzzy} (in~\cref{sec:implement}). Experiment results show that our stealth signature with the strongest security only yields a $4.09$ KB signature ($\sim 797$x improvement), meanwhile, the verification time is less than $0.2$ ms. Similarly, our scalable fuzzy tracking mechanism only takes $3.42$ ms ($\sim 76,000$x improvement) to filter each incoming message with millions of users in the setting.
+
+
+\iffalse
+\begin{itemize}
+    \item \textbf{Group based with dlog keys} - 
+        \begin{itemize}
+            \item Bounded leakage of osk - \textbf{achievable}
+            \item Unbounded leakage would imply oblivious sampler/IBE (PRV12)
+            \item Fuzziness - \textbf{achievable}
+            \item Unbounded leakage of osk  - implies a strong form of IBE  - \textbf{intuition}
+        \end{itemize}
+    \item \textbf{Lattice based} - 
+        \begin{itemize}
+            \item Practical bounded leakage of osk - \textbf{achievable (to be verified)}  with slightly worse signing time for Dilithium
+            \item Slightly inefficient unbounded leakage of osk = \textbf{achievable} with GPV trapdoors + Lyu signatures
+            \item Practical unbounded leakage of osk - \textbf{achievable (conditioned on first one)} with slightly worse signing time for Dilithium extended
+            \item Practical unbounded leakage of osk for Dilithium - implies oblivious LWE sampling and iO - \textbf{intuition}
+            \item post-quantum fuzziness with highly efficient opk 
+        \end{itemize}
+\end{itemize}
+\fi
+
+%\subsection{Prior works}
+
+\iffalse
+Pairing based construction\cite{EUROSP:LYWNW19}, lattice based construction\cite{ESORICS:LLNYY20}. Both achieve unforgeability and unlinkability with key exposure, however:
+\begin{itemize}
+    \item They give $\Ac$ an oracle to check if $\opk$ is valid instead of giving $\mtk$ directly. The difference is, with knowing $\mtk$, the $\Ac$ can break $k$-bounded key-exposure schemes: $\mtk$ will give one additional linear relation, thus $k$-bounded key-exposure resistance will degrade to $k-1$-bounded.
+    \item They only achieve existential unforgeability $\eufcmawke$ instead of strong unforgeability $\seufcmawke$.
+    \item They do not allow $\Ac$ learning $\osk_b$ in unlinkability experiment. But the pairing-based paper denotes this as strong unlinkability which can be achieved by their scheme.
+\end{itemize}
+
+\fi
+
+\section{Techniques}
+Let us first recall the group-based stealth signature scheme of~\cite{stealth2}: Given a cryptographic group $\GG=\langle g\rangle$ of prime order $p$, the master public key is $\mpk:=(g,h_0:=g^a,h_1:=g^b)\in\GG^3,$ where $\msk := (a\sample\ZZ_p,b\sample\ZZ_p)$ is the master secret key, and $\mtk := a$ is the tracking key. To re-randomize $\mpk$ to a one-time address (i.e., one-time public key), the sender samples a uniformly random $r\sample\ZZ_p$ and computes $\opk:=g^{\hash(h_0^r)}\cdot h_1\in\GG$ where $\hash:\GG\mapsto\ZZ_p$ is a hash function modelled as a random oracle. Additionally, the sender attaches tracking information $\tki:=g^r\in\GG$ to the $\opk$. To derive the corresponding one-time secret key $\osk$ from $\msk$, the receiver computes $\osk:=\hash(\tki^a)+b\in\ZZ_p$ with the help of $\tki$. Now, the receiver can sign (for e.g., Schnorr or ECDSA) any message with $\osk$ to output a signature which can be verified with corresponding $\opk$ because of the discrete-log relation $\opk=g^\osk$. An additional mechanism is that $\mtk:=a$ can be given to a tracking server for tracking: By comparing whether $\opk\eqornot g^{\hash(\tki^\mtk)}\cdot h_1$, the tracking server can determine whether $\opk$ links to the issuer of $\mtk$.
+
+Taking a closer look, this approach to build a stealth signature apparently can be generically decomposed to a linearly homomorphic one-way function $\fs:\Dc\mapsto\Mc$ where $\fs(x+y)=\fs(x)+\fs(y)$, and a key-exchange protocol $(\ke_1,\ke_2,\ke_3)$, where $\ke_i$ denotes the $i$-th message function: 
+\begin{align*}
+    \ct_1\in\Cc_1\gets & \ke_1(r_1),\\
+    (\ct_2\in\Cc_2,K\in\Kc)\gets & \ke_2(r_2,\ct_1),\\
+    K\in\Kc\gets & \ke_3(r_1,\ct_2),
+\end{align*}
+where $r_1,r_2$ are two user's secrets, and $K$ is the agreed-upon key. Here $\Cc_1, \Cc_2$ and $\mathcal{K}$ are the first message, the second message and the key space, respectively. Now, let $\mpk:=\big(\ct_1:=\ke_1(r_1), B:=\fs(b)\big)$ and $\msk:=(r_1,b),\mtk:=r_1$. To publish a one-time address, the sender can just compute $(\ct_2,K)\gets \ke_2(r_2,\ct_1)$ and publish $$\opk:= B + \fs\big(\hash(K)\big), \tki:=\ct_2$$ where $\hash:\Kc\mapsto\Dc$. Correspondingly, $$\osk:=b+\hash\big(\ke_3(r_1,\tki)\big).$$
+Since they obey the relation $\fs(\osk)=\opk$, we can leverage this to sign and verify. The tracking mechanism still works by checking if $$\opk\eqornot\fs\Big(\hash\big(\ke_3(\mtk,\tki)\big)\Big)+B.$$
+We will now adopt this blueprint to construct a stealth signature in the lattice setting.
+
+\subsection{\name: Lattice-based Stealth Signature}
+To make our protocol both \emph{efficient} and \emph{practical}, we would like to use optimized NIST winners as our building blocks. In this chapter, we choose Dilithium as the underlying digital signature considering that it is one of the most popular signature schemes in NIST~\cite{NISTPQC-R3:CRYSTALS-DILITHIUM20}. We call the resulting stealth signature scheme $\name$. Basically, it follows the above approach: In Dilithium, the public key is a Module Learning With Errors ($\mlwe$) \cite{ITCS:BraGenVai12} sample $\tn:=\An\sn_1+\sn_2$ where its secret-error pair $(\sn_1,\sn_2)$ (both chosen from a suitable \emph{short} distribution) acts as the secret key. Since $\mlwe$ involves only linear operations, we have that $$\tn+\tn'=\An(\sn_1+\sn'_1)+\sn_2+\sn_2'.$$
+Yet, even though adding samples is approximately linearly homomorphic, this addition will increase \emph{error rates} or lengths for both $\sn_1$ and $\sn_2$. Typically, the $\sn_1$ and $\sn_2$ are generated by sampling their coefficients uniformly with absolute value at most $\eta$ (for some small parameter $\eta$). The increased norm of the new secrets $(\sn_1+\sn_1',\sn_2+\sn_2')$ will incur additional running time during signing due to the so-called ``Fiat-Shamir with Abort'' mechanism of Dilithium. To alleviate this issue, we only prove $\name$ to be \emph{existential unforgeable}. This will give us better parameters to balance security and efficiency. Looking ahead, we point out that $\name$ can be transformed to an \emph{strongly existentially unforgeable} scheme using a generic compiler which we will introduce later.
+
+Apart from linearly homomorphic one-way functions, we still need a key-exchange protocol. However, this key exchange needs some additional properties. Specifically, we need a non-interactive key exchange (NIKE) protocol which is \emph{substantially} stronger than $\ke$ we depicted above.
+The starting point is that it needs to be \emph{anonymous} under chosen plaintext attacks (CPA), which means giving the message $\ct_2$, the adversary cannot link it to the $\ct_1$ used to generate $\ct_2$. This is for stealth signatures as we don't want our one-time address to be linkable to the original master public address. This security notion is formalized as \emph{unlinkability}.
+
+But anonymity under chosen plaintext attacks will not even suffice yet for our applications. We will require a stronger notion of anonymity under plaintext checking attacks (PCA). Here, the adversary is given an additional oracle which allows him to check whether a ciphertext-plaintext pair is valid or not. To see why this is necessary, consider an adversary who is trying to link some $(\opk,\tki)$ to $\mpk$. Such an adversary will be \emph{able} to sample $\ct_2\sample\Cc_2,K\sample \Kc$ to generate $(\opk',\tki')$, which can then be published to see if the tracking check passes. It turns out that anonymity under plaintext checking attacks is sufficient for this setting.
+However, we currently don't have a simple construction satisfying anonymity under plaintext checking attacks. As a consequence, we use an even stronger key-exchange protocol which is anonymous under chosen ciphertext attacks (CCA), namely, it is $\anocca$-secure (formalized in~\cref{def:anocca}). Fortunately, the recent standardized KEM by NIST, Kyber~\cite{NISTPQC-R3:CRYSTALS-KYBER20}, can be slightly modified to be $\anocca$-secure~\cite{EC:GruMarPat22} and we use Kyber in the concrete instantiation. There are multiple technical details not covered in this outline, for instance, besides $\tki$, the one-time address $\opk$ itself also needs to be anonymous. We refer to~\cref{sec:ss-lattice} for detailed construction and analysis.
+
+So far, we briefly mentioned two important security notions for stealth signatures, namely unforgeability and unlinkability (\cref{sec:def} for formalization). However, we note that we only formalize these two notions as unforgeability \emph{without} key-exposure and unlinkability \emph{without} key-exposure, respectively. It turns out the above approach to build stealth signatures (as well as in $\name$) is \emph{no longer secure} if a one-time secret key $\osk$ leaks: Suppose the sender learns $\osk$ somehow, he can instantly recover $\msk$ as $$b:=\osk-\hash\big(\ke_3(r_1,\tki)\big),$$ if he knows $r_1$ which is used to generate corresponding $\opk$.
+
+\subsection{Generic Transformation: Security with Key-exposure}
+As mentioned above and noticed in prior works\cite{EUROSP:LYWNW19,NMR2016}, leaking one-time secret keys is almost as bad as leaking the master secret key. This is a potential issue in current practical stealth signature schemes~\cite{stealth2} and it is costly to avoid. For instance, if we are willing to use techniques implying hierarchical identity-based encryption (HIBE), we could have a stealth signature scheme secure \emph{with} key-exposure attacks by using pairing\cite{C:BonFra01,EUROSP:LYWNW19}, lattice basis delegation\cite{EC:AgrBonBoy10,ESORICS:LLNYY20}, or non-black box tools\cite{C:DotGar17}. All of above techniques are several orders of magnitude slower in computational time, or orders of magnitude larger in the signature or one-time public key size.
+
+The reason we don't have a simple solution to this issue is that one-time secret keys are usually a linear function of the $\msk$ as mentioned in \cite{CCS:LRRSTW19}. Apparently, we can achieve security with \emph{bounded} key-exposure by adding more secrets in $\msk$ where bounded key-exposure means $\msk$ remains secure if the number of leaked $\osk$ is smaller than some `a priori bound' and we show a candidate construction in~\cref{sec:group-bounded}. However, any generic-group-based techniques to prevent unbounded key exposure should imply IBE which is known to be impossible using only black-box techniques~\cite{EPRINT:PapRacVah12,EPRINT:SchSeg21}.
+
+In this chapter, we provide a conceptually simple, generic, and powerful black-box compiler to tackle this problem in the context of stealth signatures (in \cref{sec:compiler}): We use a short chain of signatures\cite{C:Merkle89a} to compile any stealth signature $\SS_\msf{w/o}$ secure \emph{without} key-exposure into a strong stealth signature $\SS_\msf{w}$ secure \emph{with} unbounded key-exposure. The high-level idea is to break this `linear' relation between $\osk$ and $\msk$.
+Specifically, instead of generating $\osk$ directly, with the help of an additional digital signature $\DS$, we generate $$\osk:=(\sigma_1,\sk,\vk),$$ where $\sigma_1\gets\SS_\msf{w/o}.\sign(\osk',\vk)$ and $(\vk,\sk)\gets\DS.\gen(\secpar)$. Note that $\osk'$ is the one-time secret key in the scheme $\SS_\msf{w/o}$. Intuitively, since $\osk$ has a non-linear relation with $\msk$, the adversary cannot recover $\msk$ from $\osk$ as $\SS_\msf{w/o}$ is unforgeable. To sign a message $m$, it runs $\sigma_2\gets\DS.\sign(\sk,m)$ and outputs the final signature $\sigma:=(\sigma_1,\sigma_2,\vk)$. Similarly, to verify $\sigma$ just use $\opk$ to verify the signature $\sigma_1$ on $\vk$ and use $\vk$ to verify the signature $\sigma_2$ on $m$. Compared to the original stealth signature $\SS_\msf{w/o}$, our compiled one $\SS_\msf{w}$ incurs a slightly larger signature size and longer verification time, but in turn, is far more efficient than the above HIBE-related techniques.
+
+Additionally, we show this compiler can also leverage $\SS_\msf{w/o}$ with existential unforgeability to $\SS_\msf{w}$ with strong unforgeability via a small tweak: Instead of signing on $m$, we sign as $\sigma_2\gets\DS.\sign(\sk,m||\sigma_1)$. This prevents strong unforgeability attacks of $\SS_\msf{w}$ because: Assuming $\vk$ in $\sigma$ is not altered, a different $\sigma_1'\ne\sigma_1$ will lead to a forgery $(m||\sigma_1', \sigma_2)$ of $\DS$ in $\SS_\msf{w}$. Therefore, $\name$ can also be leveraged in this way to be strongly unforgeable with a key exposure. This gives us the first practical post-quantum $\SS_\msf{w}$ secure with a key exposure.
+
+\subsection{Fuzzy Tracking}
+We will now turn to the issue that in the above constructions, the tracking mechanism will leak the users' metadata to the tracking servers, i.e., the tracking server will know exactly which $\mtk$ belongs to which specific $(\opk,\tki)$. As discussed above, to address this problem, Beck et al.~\cite{CCS:BLMG21} proposed a mechanism named fuzzy message detection ($\fmd$): The server is given a fuzzy tracking key $\ftk$ instead of $\mtk$ to \emph{filter} incoming fuzzy tracking information $\ftki$ for its users. Here, $\ftki$ is attached with $(\opk,\tki)$. Specifically, for unmatched $\ftki$ and $\ftk$, they will be linked with probability roughly $\rho$. 
+
+
+Transforming their scheme to a post-quantum world is non-trivial as there are still two potential obstacles in the lattice setting: First, it is not practically efficient since its $\ftki$ is as large as $O(n\cdot |\ct|)$-bit where $|\ct|=\poly[\secpar]$. This is highly undesirable in practice as our expectation is something like $O(\secpar)+n$. The other problem is the uniformly-ambiguous (recalled in~\cref{sec:prelim}) encryption, as it is unclear how to extend the random oracle-based approach in~\cite{CCS:BLMG21}, to the lattice setting due to the presence of noise.
+We show that these two obstacles are related and can be resolved simultaneously.
+For simplicity, assume $n=1$ for the moment. Recall that in Regev encryption with modulus $q$, the ciphertext is composed of two parts, a vector $\cn_1\in\ZZ_q^\ell$ and a scalar $c_2\in\ZZ_q$. The secret key is $\sn\in\ZZ_q^\ell$ and decryption consists of rounding after a linear operation:
+$$\lceil\sn^T\cn_1-c_2\rfloor_2=\lceil\frac{q}{2}\cdot m + e\rfloor_2,
+$$ where $e<B<\frac{q}{4}$ is a bounded error.
+This is not just bad for efficiency (as we need additional $n\log q$ bits to encrypt $n$ more bits), but also for security: With the correct secret key $\sn$, $\sn^T\cn_1-c_2$ is distributed as a Gaussian around $\frac{q}{2}$ or $0$; With a wrong key $\sn_*$, $\sn_*^T\cn_1-c_2$ is distributed uniformly random over the entire domain $\ZZ_q$. These two cases are clearly distinguishable by an adversary.
+
+Our solution will be to compress $c_2$ into a single bit, which doesn't convey enough information about the distribution. Hence this idea will solve both of the above problems simultaneously. Brakerski et al.~\cite{TCC:BDGM19} introduced \emph{rate-1} packed Regev encryption which can compress each $c_2$ to just one bit but require an additional offset scalar $z\in\ZZ_q$ in the header. Thus to to encrypt $n$ bits, the ciphertext after compression is $(\cn_1,z,w_1,\dots,w_n)$ where $w_i\in\bin$.
+To make the offset $z$ statistically close to uniformly random (in our setting pseudorandom doesn't suffice because the adversary gets the secret key), we require \emph{super-polynomial} noise-modulus ratio of Learning With Errors ($\lwe$)\cite{STOC:Regev05} which makes the scheme slightly less efficient. 
+This gives us a lattice-based fuzzy tracking scheme (and ambiguous encryption), and surprisingly, it doesn't rely on heuristic assumptions like random oracles which are necessary in~\cite{CCS:BLMG21}. 
+
+
+\subsection{Scalable Fuzzy Tracking}
+\label{sec:tech_scalable_fuzzy}
+We observe that in the above $\fmd$ style tracking, the server's computational work is $O(N)$ with $N$ users and is not scalable when thousands (or millions) of users are using the service of the server.
+We provide a framework for \emph{scalable} fuzzy tracking which we view as a dual version of $\fmd$~\cite{CCS:BLMG21}, where the server's work is \emph{sublinear}. In this framework, we weaken the requirement that the false-positive rate can be adaptively changed by users. Instead, it is fixed in advance in this setting. 
+This weakening is reasonable as it was shown in~\cite{EPRINT:SerPejBur21} that an adversary can mount statistical attacks if users have varying false positive rates.
+To circumvent such attacks it was suggested that all users have high enough false positivity rates as even a small subset of low-rate users can affect unlinkability for the entire pool of users.
+Therefore we can fix the false positivity rate to be a high enough value for everyone. For example, as calculated in \cite{EPRINT:SerPejBur21}, the false-positive rate $\rho$ is better to be as large as $\frac{1}{\sqrt{N}}$.
+In this case, we can make the server's overhead $O(\rho N)$ for each incoming message which was at least $O(N)$ in prior works~\cite{CCS:BLMG21,USENIX:MSSSV22,C:LiuTro22}.
+
+
+
+We let the tracking server run $\ftkgen$ in the beginning to publish fuzzy public key $\fpk$ and secretly hold the fuzzy tracking key $\ftk$.
+For each $\ftki$ received from senders, the tracking server will expand $\ftki$ to a list of size $t$ composed of potential users' master public keys to which $\ftki$ may belong. The tracking server can then store $(\opk,\tki)$ in the mailbox of each candidate in this list. Crucially, the master public keys of other potential candidates should remain uncontrollable to either the sender or the server. Otherwise, the sender might manipulate the chance of each key appearing in the list. This additional property is named \emph{unbiasedness}. This rules out the trivial solution, where for instance the sender just sends directly a range of master public keys including the targeted $\mpk$.
+ 
+Since $\mpk$ of each user can be large, in our construction we hash $\mpk\in\Kc$ to some small $\hint\in\Tc$ (while making $|\Tc|\ge N$) and use the hint to locate each user's mailbox. Our scheme is based on the underlying IND-CPA encryption of Kyber, except that we use a non-prime modulus.
+For instance, assuming the hint contains $n=\lceil\log N\rceil$ bits, i.e., $b:=\hint\in\bin^n$, to generate $\ftki$, the sender modifies the Kyber512's ciphertext $\ct:=(\cn_1,c_2)$ to $\ct':=(\cn'_1,c'_2)$ as follows:
+$$\cn'_1:=\cn_1+\frac{q}{2}\begin{bmatrix}x_i\\0\end{bmatrix}\ \  c'_2:=c_2+\frac{q}{2}y_i,
+$$
+where $\ct$ (and $\ct'$) encrypts $\hint_i$ as the plaintext, $x_i\gets\msf{encode}_{R_{q}}(\xn_i)$ is a polynomial mapped from the vector $\xn_i$, and $\xn_i,\yn_i\in\bin^m\gets\hash(\delta,i)$ are outputs of a hash function $\hash$ with the seed $\delta$. Here $i\in [t]$ denotes the $i$-th target $\mpk$ as the intended recipient.
+
+For $\ftki:=\ct'$, the tracking server decrypts $\ct'$ using the key $\sk=\sn$ as follows: for $\forall j\in[t]$,
+$$\hint_j\gets\msf{decode}_{R_q}(\lceil\sn^T(\cn'_1-\frac{q}{2}\begin{bmatrix}x_j\\0\end{bmatrix})-c'_2)\rfloor_2 \oplus y_j),$$
+to get $t$ potential hints. To argue privacy, intuitively, since $\sn$ remains random to the sender, the decrypted hint for $j\ne i$ would also be random to the sender as 
+$$\hint_j=\hint_i\oplus(y_j\oplus y_i)\oplus\msf{decode}_{R_q}( \lceil\frac{q}{2}\sn^T\begin{bmatrix}x_j\\0\end{bmatrix}\rfloor_2).$$ However, to prove the unbiasedness we mentioned above, we need to be careful because the standard regularity lemma seems hard to apply with such a small noise parameter and modulus in ideal lattices. Our solution is to rely on the specific structure of the corresponding cyclotomic polynomial and shows that even $\sn^T\begin{bmatrix}x_j\\0\end{bmatrix}$ is not close to a uniformly random polynomial but there's enough entropy to make $\hint_j$ uniformly random over $\bin^n$ as long as $n$ is much smaller than the degree of the polynomial. 
+
+\section{Definitions}
+\label{sec:def}
+In this section we first present our formal definitions for a stealth signature scheme, followed by how we can add-on fuzziness to the scheme.
+Note that stealth signatures were formalized in prior works~\cite{EUROSP:LYWNW19, ESORICS:LLNYY20}, however our formalization of security is strictly stronger than theirs, and moreover we are the first to formalize tracking and fuzzy tracking for a stealth signature scheme. We will point out the exact differences in the 
+formalism as we introduce the security notions formally.
+
+Below we present the definition of stealth signatures, that formalizes the  tracking of keys which was absent in prior works. 
+This formalization allows for tracking to be outsourced to third-party servers.
+
+\begin{definition}
+\label{def:SS}
+A \emph{stealth signature} (SS) scheme consists of the PPT algorithms $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify)$  that are defined as follows.
+
+\smallskip\noindent\underline{$(\mpk, \msk, \mtk) \gets \mkgen(\secpar)$}: the master key generation algorithm takes as input the security parameter $\secpar$ and outputs the master public key $\mpk$, the master secret key $\msk$, and the master tracking key $\mtk$.
+
+    \smallskip\noindent\underline{$(\opk, \tki) \gets \opkgen(\mpk)$}: the one-time public key generation algorithm takes as input the master public key $\mpk$ and outputs the one-time public key $\opk$ and a tracking information $\tki$.
+    
+    \smallskip\noindent\underline{$\osk/\perp \gets \oskgen(\msk, \opk, \tki)$}: the one-time secret key generation algorithm takes as input the master secret key $\msk$, the one-time public key $\opk$, and the tracking information $\tki$, and outputs a one-time secret key $\osk$ or a special symbol $\perp$.
+
+    \smallskip\noindent\underline{$\true/\false \gets \track(\mtk, \opk, \tki)$}: the tracking algorithm takes as input the master tracking key $\mtk$, the one-time public key $\opk$, and the tracking information $\tki$, and outputs $\true$ or $\false$.
+    
+    \smallskip\noindent\underline{$\sigma/\perp \gets \sign(\osk, m)$}: the signing algorithm takes as input the one-time secret key $\osk$, and a message $m$, and outputs a signature $\sigma$ or a special symbol $\perp$.
+    
+    \smallskip\noindent\underline{$\true/\false \gets \verify(\opk, m, \sigma)$}: the verification algorithm takes as input the one-time public key $\opk$, a message $m$, and a signature $\sigma$, and outputs $\true$ or $\false$.
+
+\end{definition}
+
+The notion of correctness if formalized below. 
+
+\begin{definition}[Correctness]
+A SS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify)$  is said to be \emph{correct} if for all $\secpar \in \NN$,  all $(\mpk, \msk, \mtk) \gets \mkgen(\secpar)$, all $(\opk, \tki) \gets \opkgen(\mpk)$, all $\osk \gets \oskgen(\msk, \opk, \tki)$, we have the following that hold simultaneously:
+\begin{itemize}[leftmargin=*]
+    \item we have $\prob{\track(\mtk, \opk, \tki) = \true} = 1$ 
+    \item we have $\prob{\verify(\opk, m, \sign(\osk, m))=\true} = 1$,
+\end{itemize}
+note that sometimes we don't require \emph{perfect} correctness and having correctness probability $1-\negl[\secpar]$ instead would suffice.
+\end{definition}
+
+\subsection{Security of SS Without Key Exposure}
+
+In terms of security, we first want unforgeability, which guarantees that it is infeasible for an adversary to forge a signature on a (fresh) message wrt. some one-time public key $\opk^*$ for a master public key $\mpk$.
+The adversary is given access to a one-time secret key generation oracle $\oskgen\oracle$ using which the adversary can generate a fresh one-time secret key.
+However, the adversary does not get to learn the generated one-time secret keys, therefore the notion is said to be \emph{without key exposure}.
+The adversary also has access to a signing oracle, to which it can query a signature on any message of its choice wrt. any one-time secret key that has been generated with a query to $\oskgen\oracle$. The formal definition is presented below.
+
+\begin{definition}[Unforgeability without key-exposure]
+A SS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify)$ is said to be
+\emph{unforgeable without key exposure} if there exists a negligible function $\negl[]$ for all $\secpar \in \NN$, and for all PPT adversaries $\adv$ the following holds:
+\[ \prob{\seufcmawoke^\adv (\secpar)=1} \le \negl[\secpar]\]
+where $\seufcmawoke$ is defined in~\cref{fig:experiment_forge_without_key_exposure}.
+\end{definition}
+
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+    \begin{pcvstack}
+    \procedure[space=keep,codesize=\scriptsize]{$\eufcmawoke^\adv(\secpar)$}{
+    \ \\[-0.85\baselineskip][]
+    (\mpk, \msk, \mtk) \gets \mkgen(\secpar)\\
+    \OK := [], Q := \emptyset\\
+    (m^*, \sigma^*, i^*) \\
+    \quad \quad \gets \adv^{\oskgen\oracle,\sign\oracle}(\mpk,\mtk) \\
+    (\opk^*, \osk^*) := \OK[i^*]\\
+    b_0 := (m^*, \cdot, i^*) \notin Q\\
+    \pccomment{$(m^*, \sigma^*, i^*) \notin Q$ for $\seufcmawoke$}\\
+    b_1 := \verify(\opk^*, m^*, \sigma^*) \eqornot \true\\
+    \pcreturn b_0 \land b_1
+    }
+    
+
+    \end{pcvstack}
+    \pchspace
+    
+    \begin{pcvstack}
+                \procedure[space=keep,codesize=\scriptsize]{$\oskgen\oracle(\opk, \tki)$}{
+        \osk \gets \oskgen(\msk, \opk, \tki)\\
+        \OK := \OK||(\opk, \osk)\\
+        \pcreturn 1\\
+        }
+        
+        \procedure[space=keep,codesize=\scriptsize]{$\sign\oracle(i, m)$}{
+        (\opk, \osk) \gets \OK[i]\\
+        \sigma \gets \sign(\osk, m)\\
+        Q := Q \cup (m, \sigma, i)\\
+        \pcreturn \sigma
+        }
+    \end{pcvstack}
+    
+    \end{pchstack}
+    \caption{\small Experiment for unforgeability without key exposure.}
+    \label{fig:experiment_forge_without_key_exposure}
+\end{figure}
+
+We then want unlinkability, which guarantees that it is infeasible for an adversary to associate a one-time public key to the master public key wrt. which it was generated.
+The adversary is given two master public keys $\mpk_0$ and $\mpk_1$, while also given a challenge one-time public key $\opk_b$ and the corresponding tracking information $\tki_b$ (for $b \in \{ 0,1\}$) generated wrt. $\mpk_b$.
+The adversary is given access to the $\oskgen\oracle$ as before, and a signing oracle.
+The adversary is not given access to any of the one-time secret keys and therefore the notion is said to be \emph{without key exposure}. The formal definition is presented below.
+
+\begin{definition}[Unlinkability without key-exposure]
+A SS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify)$  is said to be \emph{unlinkability without key exposure} if there exists a negligible function $\negl[]$ for all $\secpar \in \NN$, and for all PPT adversaries $\adv$ the following holds:
+\[ \prob{\unlinkwoke^\adv (\secpar)=1} \le \frac{1}{2} + \negl[\secpar]\]
+where $\unlinkwoke$ is defined in~\cref{fig:experiment_unlink_without_key_exposure}.
+\end{definition}
+
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+    \begin{pcvstack}
+            \procedure[space=keep,codesize=\scriptsize]{$\unlinkwoke^\adv(\secpar)$}{
+    \ \\[-0.85\baselineskip][]
+        (\mpk_0, \msk_0, \mtk_0) \gets \mkgen(\secpar)\\
+        (\mpk_1, \msk_1, \mtk_1) \gets \mkgen(\secpar)\\
+        \OK_0 := \OK_1 := []\\
+        b \gets \bin\\
+        (\opk_b, \tki_b) \gets \opkgen(\mpk_b)\\
+        \osk_b \gets \oskgen(\msk_b, \opk_b, \tki_b)\\
+        b' \gets \adv^{\oskgen\oracle, \sign\oracle}(X, \opk_b, \tki_b)\\
+        \quad \pccomment{where $X := (\mpk_0, \mpk_1)$}\\
+    b_0 := (b = b')\\
+    \pcreturn b_0
+    }
+    
+
+    \end{pcvstack}
+
+    \pchspace
+    \begin{pcvstack}
+                \procedure[space=keep,codesize=\scriptsize]{$\oskgen\oracle(b^*,\opk, \tki)$}{
+        \osk \gets \oskgen(\msk_{b^*}, \opk, \tki)\\
+        \OK_{b^*} := \OK_{b^*}||(\opk, \osk)\\
+        \pcreturn 1\\
+        }
+        
+        \pchspace
+        
+        \procedure[space=keep,codesize=\scriptsize]{$\sign\oracle(b^*, i,m)$}{
+        \pcif i = -1 \pcthen\\
+        \pcind \sigma \gets \sign(\osk_b, m)\\
+        \pcelse \\
+        \pcind (\opk, \osk) \gets \OK_{b^*}[i]\\
+        \pcind \sigma \gets \sign(\osk, m)\\
+        \pcreturn \sigma
+        }
+    \end{pcvstack}
+    \end{pchstack}
+    \caption{\small Experiment for unlinkability without key exposure.}
+    \label{fig:experiment_unlink_without_key_exposure}
+\end{figure}
+
+\subsection{Security of SS With Key Exposure}
+
+Prior works~\cite{EUROSP:LYWNW19, ESORICS:LLNYY20} formalized security with additionally giving adversary the one-time secret keys, i.e., the $\oskgen\oracle$ returns the generated $\osk$ to the adversary. 
+
+The unforgeability notion \emph{with key exposure} is formalized below. Notice that our formalization exposes  the one-time secret keys $\osk$ to the adversary except the key wrt. which the adversary forges the signature.
+
+\begin{definition}[Unforgeability with key-exposure]
+A SS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify)$ is said to be \emph{unforgeable with key exposure} if there exists a negligible function $\negl[]$ for all $\secpar \in \NN$, and for all PPT adversaries $\adv$ the following holds:
+\[ \prob{\seufcmawke^\adv (\secpar)=1} \le \negl[\secpar]\]
+where $\seufcmawoke$ is defined in~\cref{fig:experiment_forge_with_key_exposure}.
+\end{definition}
+
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+     \procedure[space=keep,codesize=\scriptsize]{$\seufcmawke^\adv(\secpar)$}{
+    (\mpk, \msk, \mtk) \gets \mkgen(\secpar)\\
+    \OK := [], Q := \emptyset\\
+    (m^*, \sigma^*, i^*)\\
+    \quad \quad \gets \adv^{\oskgen\oracle, \sign\oracle}(\mpk,\mtk) \\
+    (\opk^*, \osk^*, \cdot) := \OK[i^*]\\
+    b_0 := (m^*, \sigma^*, i^*) \notin Q\\
+    b_1 := \verify(\opk^*, m^*, \sigma^*) = 1\\
+    b_2 := (\OK[i^*] \ne (\cdot, \cdot, \true))\\
+    \pcreturn b_0 \land b_1 \land b_2
+    }
+    
+    \pchspace
+    
+    \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\oskgen\oracle(i, \opk, \tki, \flag)$}{
+        \pcif \OK[i]=(\opk,\cdot,\cdot) \wedge \flag=\true\\
+        \pcreturn \OK[i].\osk\\
+        \osk \gets \oskgen(\msk, \opk, \tki)\\
+        \OK := \OK||(\opk, \osk, \flag)\\
+        \pcif \flag=\true \pcthen \pcreturn \osk \\
+        \pcelse \pcreturn 1\\
+        }
+        
+        \procedure[space=keep,codesize=\scriptsize]{$\sign\oracle(i, m)$}{
+        (\opk, \osk, \flag) \gets \OK[i]\\
+        \sigma \gets \sign(\osk, m)\\
+        Q := Q \cup (m, \sigma, i)\\
+        \pcreturn \sigma\\
+        }
+        
+        % \procedure[space=keep]{$\corrupt\oracle(i)$}{
+        % (\opk, \osk, \top) \gets \OK[i]\\
+        % \OK[i] := (\opk, \osk, \bot)\\
+        % \pcreturn \osk
+        % }
+    \end{pcvstack}
+    \end{pchstack}
+    \caption{\small Experiment for unforgeability with key exposure.}
+    \label{fig:experiment_forge_with_key_exposure}
+\end{figure}
+
+The notion of unlinkability \emph{with key exposure} is formalized below. Similar to the case above, the $\oskgen\oracle$ returns the generated $\osk$. Our formalization apart from the tracking functionality is stronger than prior works in that the adversary is even given the challenge one-time secret key $\osk_b$.
+
+\begin{definition}[Unlinkability with key-exposure]
+\label{def:unlink-with-key}
+A SS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify)$  is said to be \emph{unlinkability with key exposure} if there exists a negligible function $\negl[]$ for all $\secpar \in \NN$, and for all PPT adversaries $\adv$ the following holds:
+\[ \prob{\unlinkwke^\adv (\secpar)=1} \le \frac{1}{2} + \negl[\secpar]\]
+where $\unlinkwoke$ is defined in~\cref{fig:experiment_unlink_with_key_exposure}.
+\end{definition}
+
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+    \procedure[space=keep,codesize=\scriptsize]{$\unlinkwke^\adv(\secpar)$}{
+        \ \\[-0.85\baselineskip][]
+        (\mpk_0, \msk_0, \mtk_0) \gets \mkgen(\secpar)\\
+        (\mpk_1, \msk_1, \mtk_1) \gets \mkgen(\secpar)\\
+        \OK_0 := \OK_1 := []\\
+        b \gets \{ 0,1\}\\
+        (\opk_b, \tki_b) \gets \opkgen(\mpk_b)\\
+        \osk_b \gets \oskgen(\msk_b, \opk_b, \tki_b)\\
+        b' \gets \adv^{\oskgen\oracle}(X, \opk_b, \tki_b, \osk_b)\\
+        \quad \pccomment{where $X := (\mpk_0, \mpk_1)$}\\
+    b_0 := (b = b')\\
+    \pcreturn b_0
+    }
+    
+    \pchspace
+    \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\oskgen\oracle(b^*, \opk, \tki)$}{
+        %\pcreturn 1 \t \pcif \opk=\opk_b\vee \tki=\tki_b\\
+        \osk \gets \oskgen(\msk_{b^*}, \opk, \tki)\\
+        \OK_{b^*} := \OK_{b^*}||(\opk, \osk)\\
+        \pcreturn \osk\\
+        }
+        
+    \end{pcvstack}
+    \end{pchstack}
+    \caption{\small Experiment for unlinkability with key exposure.}
+    \label{fig:experiment_unlink_with_key_exposure}
+\end{figure}
+
+\subsection{Fuzzy Stealth Signatures}
+\label{sec:fuzzy-ss}
+We now formally incorporate the fuzzy tracking functionality into the definition of stealth signing. 
+
+
+\begin{definition}[Fuzzy Stealth Signatures]
+A \emph{fuzzy stealth signatures} (F-SS) scheme is a $\SS$ scheme  $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify)$  with additional interfaces $(\ftkgen$, $\ftrack)$ defined below.
+
+\smallskip\noindent\underline{$(\opk,\tki,\ftki) \gets \opkgen(\mpk)$}: overloading the interface $\opkgen$ to output the fuzzy tracking information $\ftki$.
+
+\smallskip\noindent\underline{$\ftk \gets \ftkgen(\mtk, \rho)$}: the fuzzy tracking key generation algorithm takes as input the master tracking key $\mtk$, and a false positivity rate $\rho$, and outputs a fuzzy tracking key $\ftk$.
+
+\smallskip\noindent\underline{$\true/\false \gets \ftrack(\ftk, \ftki)$}: the fuzzy tracking algorithm takes as input the fuzzy tracking key $\ftk$, the fuzzy tracking information $\ftki$, and outputs $\true$ or $\false$.
+
+\end{definition}
+
+We define the notion of correctness below. 
+We borrow the notion of fuzziness from~\cite{CCS:BLMG21} and adapt the same for the stealth signature setting. Intuitively, the correctness of fuzzy tracking says that with a probability $\rho$, the fuzzy tracking algorithm returns $\true$ for a mismatched fuzzy tracking key and a one-time public key. 
+For a correctly matched fuzzy tracking key and a one-time public key, the tracking algorithm always returns $\true$.
+
+
+
+\begin{definition}[Correctness for fuzzy tracking]\label{def:fuzzy-tracking-correct}
+An F-SS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify$, $\ftkgen$, $\ftrack)$ is said to be \emph{correct} if the original SS scheme is correct and if for all $\secpar \in \NN$, all $\rho \in (0,1]$, all $(\mpk, \msk, \mtk) \gets \mkgen(\secpar)$, all $(\opk, \tki, \ftki) \gets \opkgen(\mpk)$, all $\osk \gets \oskgen(\msk, \opk, \tki)$, all $\ftk \gets \ftkgen(\mtk, \rho)$, we have the following that holds simultaneously:
+\begin{itemize}[leftmargin=*]
+    \item $\prob{\ftrack(\ftk, \ftki) = \true} = 1$ 
+    \item and for any $\ftki' \notin \support(\opkgen(\mpk)) $, we have $$\prob{\ftrack(\ftk, \ftki') = \true} = \rho.$$
+\end{itemize}
+
+\end{definition}
+
+The unforgeability notion is the same as in~\cref{fig:experiment_forge_with_key_exposure} as the adversary in the notion is given the master tracking key already. 
+
+Unlinkability with fuzzy tracking guarantees that it is infeasible for an adversary given two fuzzy tracking keys, both of which return a $\true$ or a $\false$ when tracking a challenge one-time public key $(\opk_b,\ftki_b)$ simultaneously, to associate $(\opk_b,\ftki_b)$ with the correct tracking key, i.e., either $\ftk_0$ or $\ftk_1$.
+The adversary is said to violate the notion if it can guess correctly the association non-negligibly more than 1/2.
+
+
+\begin{definition}[Unlinkability with key-exposure and fuzzy tracking]
+\label{def:unlink-with-key-fuzzy}
+A F-SS scheme  $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify$, $\ftkgen$, $\ftrack)$ is said to be \emph{unlinkable with key-exposure and fuzzy tracking} if there exists a negligible function $\negl[]$ for all $\secpar \in \NN$, all $\rho \in (0,1]$, and for all PPT adversaries $\adv$ the following holds:
+
+\[ \prob{\unlinkfwke^\adv(\secpar, \rho)=1} \le \frac{1}{2} + \negl[\secpar]\]
+where $\unlinkfwke$ is defined in~\cref{fig:experiment_unlink_with_key_exposure_fuzzy}.
+\end{definition}
+
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+    \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\unlinkfwke(\secpar)$}{
+        \OK_0 := \OK_1 := []\\
+        (\mpk_0, \msk_0, \mtk_0) \gets \mkgen(\secpar)\\
+        (\mpk_1, \msk_1, \mtk_1) \gets \mkgen(\secpar)\\
+        b \gets \{ 0,1\}\\
+        (\opk_b, \tki_b, \ftki_b) \gets \opkgen(\mpk_b)\\
+        \osk_b \gets \oskgen(\msk_b, \opk_b, \tki_b)\\
+        (\st_\adv, \rho) \gets \adv_1(\mpk_0,\mpk_1,\opk_b,\\
+                \pcind\pcind\pcind\pcind \tki_b, \ftki_b, \osk_b)\\
+        \ftk_0 \gets \ftkgen(\mtk_0, \rho)\\
+        \ftk_1 \gets \ftkgen(\mtk_1, \rho)\\
+        b_1 \gets \ftrack(\ftk_0, \ftki_b)\\
+        b_2 \gets \ftrack(\ftk_1, \ftki_b)\\
+        \pcif b_1 = b_2\\
+        \pcind b' \gets \adv_2^{\oskgen\oracle}(\st_\adv, \ftk_0,\ftk_1)\\
+        \pcelse\\
+        \pcind b' \sample \bin\\
+        \pcreturn (b = b')
+        }
+    \end{pcvstack}
+    
+    \pchspace
+    
+    \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\oskgen\oracle(b^*, \opk, \tki)$}{
+        \osk \gets \oskgen(\msk_{b^*}, \opk, \tki)\\
+        \OK_{b^*} := \OK_{b^*}||(\opk, \osk)\\
+        \pcreturn \osk\\
+        }
+    \end{pcvstack}
+    \end{pchstack}
+    \caption{\small Experiment for unlinkability of F-SS with key-exposure.}
+    \label{fig:experiment_unlink_with_key_exposure_fuzzy}
+\end{figure}
+
+
+
+\subsection{Scalable Fuzzy Tracking}
+\label{sec:fuzzy*-ss}
+\iffalse
+Apart from the $\fmd$-like approach defined above, we provide another framework for \emph{scalable} fuzzy tracking which we view as a dual version of~\cref{sec:fuzzy-ss}. The trade-off is between the tracking server's overhead and users' usability: Specifically, we weaken the requirement that the false-positive rate can be adaptively changed by users. Instead, it is fixed in advance in this setting. We argue that this weakening is reasonable: Note that even when each user is able to choose their own rate, the statistical attacks by a tracking server actually depend on the rates of all users that are using the server.
+For example, consider two users, one with a high false positivity rate and the other with a very low rate, using the tracking server.
+The tracking server based on the two rates can heuristically guess if a $\opk$ belongs to which of the two users.
+
+ Also, all of the prior works assume $\rho$ is fixed for every user in their analysis as it is hard to analyze for different rates\cite{EPRINT:SerPejBur21,CCS:BLMG21}. 
+As suggested in \cite{EPRINT:SerPejBur21}, to argue unlinkability, there should be a large number of users with high enough false positivity rates. However, a subset of users with high rates can be easily distinguished from users with low rates via clustering messages, thus it remains unclear how much this approach could help. From a game-theoretic perspective, each user will choose the rate as small as permitted if he knows his privacy also depends on other users' choice \cite{EPRINT:SerPejBur21}. 
+
+On the other side, if we weaken the requirement of different rates, we can dramatically reduce the tracking server's overhead to be just \emph{sublinear} of the number of total users $N$ that are using the tracking server, both in terms of computation and communication. For example, as calculated in \cite{EPRINT:SerPejBur21}, the false-positive rate $\rho$ is better to be as large as $\frac{1}{\sqrt{N}}$, then we can make server's overhead $O(\rho N)$ for each message which was at least $O(N)$ in prior works \cite{CCS:BLMG21,USENIX:MSSSV22,C:LiuTro22}.
+
+We define the functionality and security as follows: Note that the false-positive rate is fixed and no longer different for different users. Thus we let the tracking server run $(\fpk,\ftk)\gets\ftkgen(\rho, N)$ in the beginning, and for each $\ftki$, $\lis\gets\ftrack(\ftk,\allowbreak\ftki)$ will return a list of size $\rho N$ composed of potential users' master public keys to which $\ftki$ may belong to. The tracking server can then forward $(\opk,\tki)$ to each candidate in this list. Crucially, the master public keys of the candidates should remain uniformly random to the sender running $\opkgen$ except for the targeted one, i.e., the user owning the key target $\mpk$. Otherwise, the sender might manipulate the chance of each key appearing in the list. This rules out the trivial solutions, where for instance the sender just sends directly a range of master public keys including the targeted $\mpk$.
+\fi
+We now formalize the functionality, correctness, and security of fuzzy scalable stealth signatures as follows.
+\begin{definition}[Fuzzy Scalable Stealth Signatures]
+A \emph{fuzzy scalable stealth signature} (F-SSS) is a $\SS$ scheme  $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify)$ with additional interfaces $(\ftkgen, \ftrack)$ and a modified $\opkgen$ defined below.
+
+\smallskip\noindent\underline{$(\fpk,\ftk)\gets \ftkgen(\rho, N)$}: the fuzzy tracking key generation algorithm takes as input a false positivity rate $\rho$, and the number of total users $N$, and outputs a fuzzy tracking key $\ftk$ and fuzzy public key $\fpk$. The algorithm is run by the tracking server ahead of time.
+
+\smallskip\noindent\underline{$(\opk,\tki,\ftki) \gets \opkgen(\mpk,\fpk)$}: overloading the interface $\opkgen$ to additionally take input $\fpk$ and output fuzzy tracking information $\ftki$.
+
+
+\smallskip\noindent\underline{$\lis \gets \ftrack(\ftk, \ftki)$}: the fuzzy tracking algorithm takes as input the fuzzy tracking key $\ftk$, the fuzzy tracking information $\ftki$, and outputs a $\lis$ consisting of master public keys. 
+\end{definition}
+
+\begin{definition}[Correctness for fuzzy scalable stealth signatures]\label{def:fuzzy*-tracking-correct}
+An F-SSS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify$, $\ftkgen$, $\ftrack)$ is said to be \emph{correct} if the original SS scheme is correct and if for all $\secpar \in \NN$, all $\rho \in (0,1]$, all $(\mpk, \msk, \mtk) \gets \mkgen(\secpar)$, all $(\opk, \tki, \ftki) \gets \opkgen(\mpk,\fpk)$, all $\osk \gets \oskgen(\msk, \opk, \allowbreak \tki)$, all $(\fpk,\ftk) \gets \ftkgen(\rho, N)$, we have the following that holds simultaneously:
+\begin{itemize}[leftmargin=*]
+    \item $\prob{\mpk\in\ftrack(\ftk, \ftki)} = 1$ 
+    \item and for any $\mpk' \ne \mpk$, we have $$\prob{\mpk'\in\ftrack(\ftk, \ftki)} \approx \rho.$$
+\end{itemize}
+\end{definition}
+
+Crucially, we omit $\opk$ in $\ftrack$ as $\ftki$ is already associated with $\opk$ and we still have the regular $\track$ algorithm that works with $\tk$, $\opk$ and $\tki$ for tracking. The correctness definition above 'ties' together the keys $\ftk$, $\mpk$ and $\mtk$, and $(\opk, \tki, \ftki) \gets \opkgen(\mpk)$ by requiring that $\ftrack(\ftk, \ftki)$ always returns 1.
+
+
+
+\begin{definition}[Unlinkability with key-exposure and fuzzy scalable tracking]
+\label{def:unlink-with-key-fuzzy*}
+A F-SSS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify$, $\ftkgen$, $\ftrack)$ is said to be \emph{unlinkable with key-exposure and fuzzy scalable tracking} if there exists a negligible function $\negl[]$ for all $\secpar \in \NN$, all $\rho \in (0,1]$, and for all PPT adversaries $\adv$ the following holds:
+\[ \prob{\unlinkfswke^\adv(\secpar, \rho,N)=1} \le \frac{1}{2} + \negl[\secpar]\]
+where $\unlinkfswke$ is defined in~\cref{fig:experiment_unlink_with_key_exposure_fuzzy*}. Note that, similar to prior works, we only consider the semi-honest server in the definition. 
+\end{definition}
+\begin{figure}[!t]
+    \centering
+    \begin{pcvstack}[boxed]
+    \begin{pchstack}
+    \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\unlinkfswke(\secpar, \rho,N)$}{
+        \OK_0 := \OK_1 := []\\
+        (\mpk_0, \msk_0, \mtk_0) \gets \mkgen(\secpar)\\
+        (\mpk_1, \msk_1, \mtk_1) \gets \mkgen(\secpar)\\
+        (\fpk, \ftk) \gets \ftkgen(\rho, N)\\
+        b \gets \{ 0,1\}\\
+        (\opk_b, \tki_b, \ftki_b) \gets \opkgen(\mpk_b,\\
+        \qquad\qquad\qquad\qquad\qquad\fpk)\\
+        \osk_b \gets \oskgen(\msk_b, \opk_b, \tki_b)\\
+        \lis \gets \ftrack(\ftk, \ftki_b)\\
+        \pcif \mpk_0\in\lis \wedge \mpk_1\in\lis\\
+        \pcind b' \gets \Ac_2^{\oskgen\oracle}(\ftk,\mpk_0,\mpk_1,\\
+        \qquad\qquad\opk_b,\tki_b,\ftki_b,\osk_b)\\
+        \pcelse\\
+        \pcind b' \sample \bin\\
+        b_0 := (b = b')\\
+        \pcreturn b_0
+        }
+    \end{pcvstack}
+    
+    \pchspace
+    
+    \begin{pcvstack}
+    \procedure[codesize=\scriptsize]{$\uniubs(\secpar,\rho,N)$}{
+    (\fpk,\ftk)\gets\ftkgen(\rho,N)\\
+    (\st_\Ac, \ftki, i, j, \mpk)\gets\Ac_1(\fpk)\\
+    \lis\gets\ftrack(\ftk,\ftki)\\
+    b\sample\bin\\
+    \pcif \lis[i]\ne \mpk \vee i=j \vee \mpk\ne \Kc\\
+    \pcind b'\sample\bin\\
+    \pcelse\\
+    \pcind \vn^0 := \lis[j], \vn^1\sample\Kc\\
+    \pcind b'\gets\Ac_2(\st_\Ac, \vn^b)\\
+    \pcreturn b\eqornot b'
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\oskgen\oracle(b^*, \opk, \tki)$}{
+        \osk \gets \oskgen(\msk_{b^*}, \opk, \tki)\\
+        \OK_{b^*} := \OK_{b^*}||(\opk, \osk)\\
+        \pcreturn \osk\\
+    }
+    \end{pcvstack}
+    
+    \end{pchstack}
+    \end{pcvstack}
+    \caption{\small Experiments for unlinkability and uniformly unbiasedness of F-SSS with Key-Exposure.}
+    \label{fig:experiment_unlink_with_key_exposure_fuzzy*}
+    \label{fig:experiment_unbias}
+\end{figure}
+
+
+\begin{definition}[Unbiasedness for fuzzy scalable tracking]\label{def:fuzzy*-tracking-unbias}
+A F-SSS scheme $(\mkgen$, $\opkgen$, $\oskgen$, $\track$, $\sign$, $\verify$, $\ftkgen$, $\ftrack)$ is said to be \emph{unbiased by senders} if there exists a negligible function $\negl[]$, for all $\secpar \in \NN$, and for all PPT adversaries $\adv$ the following holds:
+$$\prob{\uniubs^\Ac(\secpar,\rho,N)=1}\le \frac{1}{2}+\negl[\secpar],
+$$
+where the experiment $\uniubs$ is defined in~\cref{fig:experiment_unbias} where $\lis[i]$ denotes the $i$-th item of the list and $\Kc$ denotes the master public key space.
+
+\end{definition}
+
+\section{Generic Transformation of Stealth Signatures}
+\label{sec:compiler}
+We provide our black-box compiler below to upgrade an $\SS_\mathsf{w/o}$ without key-exposure to an $\SS_\msf{w}$ with key-exposure.
+
+Suppose we have a digital signature scheme $\DS$ which is strongly unforgeable $\seufcma$. Then we have a black-box compiler leveraging $\SS$ to stronger version as shown in~\cref{fig:ss-compiler}. Basically, the compiler transforms any $\SS_\mathsf{w/o}$ with $\eufcmawoke$ and $\unlinkwoke$ security (without key-exposure) into an $\SS_\msf{w}$ with $\seufcmawke$ and $\unlinkwke$ security (with key-exposure).
+
+\begin{figure}[!t]
+    %\centering
+    \begin{pchstack}[center, boxed]
+    \begin{pcvstack}
+    \procedure[space=keep,codesize=\scriptsize]{$\mkgen(\secpar)$}{
+        \pcreturn \SS_\mathsf{w/o}.\mkgen(\secpar)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\oskgen(\msk,\opk,\tki)$}{
+        (\vk,\sk) \gets \DS.\gen(\secpar)\\
+        \tempk \gets \SS_\mathsf{w/o}.\oskgen(\msk,\opk,\tki)\\
+        \pcreturn \perp \pcif \tempk=\perp\\
+        \sigma_1 \gets \SS_\mathsf{w/o}.\sign(\tempk, \vk)\\
+        \pcreturn \osk:=(\sigma_1,\sk,\vk)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\track(\mtk,\opk,\tki)$}{
+        \pcreturn \SS_\mathsf{w/o}.\track(\mtk,\opk,\tki)
+    }
+
+    \end{pcvstack}
+    \pchspace
+    \begin{pcvstack}
+    \procedure[space=keep,codesize=\scriptsize]{$\opkgen(\mpk)$}{
+        \pcreturn \SS_\mathsf{w/o}.\opkgen(\mpk)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\sign(\osk,m)$}{
+        \pcreturn \perp \pcif \osk=\perp\\
+        (\sigma_1,\sk,\vk)\gets\osk\\
+        \sigma_2\gets\DS.\sign(\sk, m||\sigma_1)\\
+        \pcreturn \sigma:=(\sigma_1,\sigma_2,\vk)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\verify(\opk,\sigma,m)$}{
+        (\sigma_1,\sigma_2,\vk) := \sigma\\
+        \pcif \SS_\mathsf{w/o}.\verify(\opk,\sigma_1,\vk) \land \\
+        \pcind \pcind \DS.\verify(\vk,\sigma_2,m||\sigma_1)\\
+        \pcind \pcreturn 1\\
+        \pcelse \pcreturn 0
+    }
+    \end{pcvstack}
+    \end{pchstack}
+\caption{\small A generic transformation to lift $\SS_\mathsf{w/o}$ to $\SS_\mathsf{w}$.}
+\label{fig:ss-compiler}
+\end{figure}
+
+It is easy to see that correctness always holds as long as $\SS_\mathsf{w/o}$ and $\DS$ are correct. The security of unforgeability and unlinkability for $\SS_\mathsf{w}$ are captured informally in the following theorem. The formal theorem and security proofs are deferred to~\cref{sec:compiler_proof}.
+
+\begin{theorem}[informal]
+\label{thm:compiler}
+The stealth signature $\SS_\mathsf{w}$ constructed in~\cref{sec:compiler} is secure in $\seufcmawke$ and $\unlinkwke$ experiments if $\SS_\mathsf{w/o}$ is $\eufcmawoke$ secure, $\unlinkwoke$ secure, and $\DS$ is $\seufcma$ secure.
+\end{theorem}
+
+
+\section{\name: Lattice-based (Fuzzy) Stealth Signature}
+\label{sec:ss-main-constructions}
+We first describe $\name$ and later show we can make it fuzzy.
+
+\subsection{Lattice-based Stealth Signature}
+\label{sec:ss-lattice}
+
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+    \begin{pcvstack}
+    \procedure[space=keep,codesize=\scriptsize]{$\mkgen(\secpar)$}{
+    \ \\[-0.85\baselineskip][]
+        \An\in R^{k\times \ell}_q\gets\Dil.\expanda(\crs)\\
+        (\sn_1,\sn_2)\sample S^\ell_\eta\times S^k_\eta\\
+        \tn := \An\sn_1+\sn_2\\
+        (\ek, \dk)\gets \kem.\gen(\secpar)\\
+        \mpk:=(\tn,\ek), \\
+        \msk:=(\sn_1,\sn_2,\dk,\tn)\\
+        \mtk:=(\dk,\tn)\\
+        \pcreturn (\mpk,\msk,\mtk)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\oskgen(\msk,\opk,\tki)$}{
+        (\sn_1,\sn_2,\dk,\tn):=\msk\\
+        \pcif \false\gets\track((\dk,\tn), \opk,\tki)\\
+        \pcind \pcreturn \perp \\
+        K \gets \kem.\decaps(\dk, \tki)\\
+        (\sn'_1,\sn'_2) \gets\Dil.\expands(K)\\
+        \pcreturn \osk:=(\sn_1+\sn'_1, \sn_2+\sn'_2)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\verify(\opk,\sigma, m)$}{
+        \pcreturn \Dil.\verify(\opk, \sigma, m) 
+    }
+    \end{pcvstack}
+    \pchspace
+    \begin{pcvstack}
+    \procedure[space=keep,codesize=\scriptsize]{$\opkgen(\mpk)$}{
+        (\tn,\ek) := \mpk\\
+        \An\gets\Dil.\expanda(\crs)\\
+        (C, K) \gets\kem.\encaps(\ek) \\
+        (\sn'_1, \sn'_2)\in S^\ell_\eta\times S^k_\eta \gets\Dil.\expands(K)\\
+        \tn' :=\tn+\An\sn'_1+\sn'_2\\
+        (\tn'_1, \cdot)\gets\Dil.\powerround(\tn', d)\\
+        \pcreturn (\opk:=\tn'_1, \tki:= C)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\sign(\osk,m)$}{
+        \pcreturn \perp \pcif \osk=\perp\\
+        \pcreturn \sigma:=\Dil.\sign(\osk, m)
+    }
+    \pcvspace
+    \procedure[space=keep,codesize=\scriptsize]{$\track(\mtk,\opk,\tki)$}{
+        (\dk, \tn):=\mtk\\
+        \An\gets\Dil.\expanda(\crs)\\
+        K \gets \kem.\decaps(\dk, \tki)\\
+        (\sn'_1,\sn'_2) \gets\Dil.\expands(K)\\
+        \tilde{\tn}:=\tn+\An\sn'_1+\sn'_2\\
+        (\tilde{\tn}_1, \cdot)\gets \Dil.\powerround(\tilde{\tn}, d)\\
+        \pcreturn \opk\eqornot\tilde{\tn}_1
+    }
+    \end{pcvstack}
+    \end{pchstack}
+\caption{Construction of $\name$ with $\eufcmawoke$ and $\unlinkwoke$ security}
+\label{fig:ss-lattice}
+\end{figure}
+
+We use an $\anocca$-secure key exchange $\kem$ (Kyber)~\cite{NISTPQC-R3:CRYSTALS-KYBER20} and an $\eufcma$-secure signature (Dilithium) to construct an SS scheme with \emph{existential unforgeability without key-exposure} and \emph{unlinkability without key-exposure} in random oracle model. We require a common reference string $\crs\sample\bin^{256}$, but for conciseness, we omit the explicit mention of $\crs$ in interfaces. We provide the detailed construction in~\cref{fig:ss-lattice}. 
+
+Intuitively, we use $\kem$ to re-randomize the underlying master secret key $\msk$ to obtain $\osk$ each time and it needs to be actively anonymous which can be instantiated by Kyber with slight modification as shown in~\cite{EC:GruMarPat22}. Also, we only require Dilithium to be $\eufcma$ secure which gives us a larger space to choose parameters.
+We recall Dilithium as follows.
+
+\begin{definition}[Dilithium~\cite{NISTPQC-R3:CRYSTALS-DILITHIUM20}]
+Dilithium denoted by $\Dil$ is a post-quantum digital signature $\DS$ scheme based on the ``Fiat-Shamir with Aborts'' approach~\cite{AC:Lyubashevsky09,EC:Lyubashevsky12}. It is based on $\mlwe,\msis$ and $\selfmsis$ assumptions with ring $R_q:=\ZZ_q[X]/(X^m+1)$. Moreover, for secrets $\sn\sample S^\ell_\eta$, each coefficient of the vector is an element of $R_q$ with small coefficients of size at most $\eta$. In its optimized construction, there are some useful supporting algorithms which we described as follows:
+\begin{itemize}[leftmargin=*]
+    \item $\expanda(\crs):$ The  function  maps a uniform seed $\crs$ to a matrix $\An\in R^{k\times\ell}_q$.
+    \item $\expands(K):$ The  function  used for generating the secret
+    vectors in key generation, maps a seed $K$ to $(\sn_1,\sn_2)\in S^\ell_\eta\times S^k_\eta$.
+    \item $\powerround(r, d):$ The function  is the straightforward
+    bit-wise way to break up an element $r := r_1\cdot2^d+r_0$ where $r_0 = r\mod 2^d$ and $r_1 = (r-r_0)/2^d$.
+    \item $\highbits_q(r,\alpha):$ The function  select an $\alpha$ that is a divisor of $q-1$ and write $r = r_1\cdot \alpha + r_0$ in the same way as before then returns $r_1$.
+    \item $\makehint_q(z,r,\alpha):$ The function  runs $r_1\gets\highbits(r,\alpha)$ and $v_1\gets\highbits(r+z,\alpha)$, then returns $r_1\ne v_1$.
+\end{itemize}
+\end{definition}
+
+
+
+
+\smallskip\noindent\textbf{Correctness.}
+Since
+$$\tn'=\tn+\An\sn'_1+\sn'_2=\An(\sn'_1+\sn_1)+ (\sn_2+\sn'_2),
+$$
+it is easy to see we have $1-
+\negl[\secpar]$ correctness as long as underlying $\kem$ and $\Dil$ have $1-
+\negl[\secpar]$ correctness.
+
+Notably, $\sn'_1+\sn_1$ and $\sn_2+\sn'_2$ have roughly doubled the norm thus doubling $\beta$ in signatures. This will incur additional iterations in $\sign$ as the number of repetitions is roughly $2^{-256\cdot \beta(\frac{\ell}{\gamma_1}+\frac{k}{\gamma_2})}$ where $\gamma_1\approx 2\gamma_2$\cite{NISTPQC-R3:CRYSTALS-DILITHIUM20}.
+However, besides having doubled $\beta$, we can increase $\gamma_1$ and $\gamma_2$ to $2\gamma_1$ and $2\gamma_2$, respectively. This tweak just slightly lowers the $\selfmsis$ hardness but won't harm the running time. To see this, in $\Dil$'s proof, the reduction's advantage mainly dominated by $\msis_{k,\ell,4\gamma_2}$ for $\seufcma$ security, but $\selfmsis_{k,\ell+1,2\gamma_2}$ for $\eufcma$ security. Without using the forking lemma (since it is not tight and not possible in a quantum setting), the hardness of $\selfmsis$ is mainly from finding some sort ($\norm{\cdot}_\infty\le 2\gamma_2$) vectors $\zn,\un'$ such that $\An\zn+\un'=\tn'$ and amounts to $\msis$ problem (referring to Section 6.2.1 and Appendix C.3 in \cite{NISTPQC-R3:CRYSTALS-DILITHIUM20} for details).
+Therefore, doubled $\gamma_2$ in our $\name$ construction gives the reduction of $\eufcmawoke$ roughly the same advantage as that of $\seufcma$ in $\Dil$. We present the concrete security level in~\cref{tab:implementation}.
+
+
+\smallskip\noindent\textbf{Security Analysis.}
+We prove the construction of $\name$ in~\cref{fig:ss-lattice} is existential unforgeable and unlinkable \emph{without} key exposure, and is secure in $\eufcmawoke$ and $\unlinkwoke$ experiment, respectively.
+For the security of $\eufcmawoke$, we prove this in two steps. First, we show it is unforgeable without key exposure under no-message attacks (NMA), i.e., the adversary cannot query $\sign\Oc(\cdot)$, and we refer the corresponding experiment to $\ufnmawoke$; Next, we show a reduction from $\ufnmawoke$ to $\eufcmawoke$. Since $\Dil$ does not rely on the lower parts of the public key $\tn_0$ to be secret, so for simplicity, we assume the one-time public key $\opk$ is $\tn'$ instead of $\tn'_1$. Also, we assume $\crs:=\An$ directly and is publicly known.
+
+\begin{lemma}[informal]
+\label{lem:ufnmawoke-abs}
+$\name$ in~\cref{fig:ss-lattice} is unforgeable without key exposure under no-message attacks if $\selfmsis$ and $\mlwe$ assumptions hold.
+\end{lemma}
+
+
+Then we have the following theorems to show the construction is unforgeable and unlinkable. The formal statement and analysis of the above lemma and the following theorem is deferred to~\cref{sec:security_spirit}.
+\begin{theorem}[informal]
+\label{thm:ss-woke-abs}
+$\name$ in~\cref{fig:ss-lattice} is existential unforgeable and unlinkable without key exposures if it is $\ufnmawoke$ and the KEM used is $\anocca$ secure.
+\end{theorem}
+
+
+\subsection{Lattice-based Fuzzy Stealth Signature}
+\label{sec:ss-lattice-fuzzy}
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+        \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\mkgen(\secpar,n)$}{
+            \ \\[-0.85\baselineskip][]
+            \mpk',\mtk',\msk'\gets\SS.\mkgen(\secpar)\\
+            (\pk,\sk) \gets \pRgv.\gen(\secpar, n)\\
+            \mpk:=(\mpk',\pk), \msk:=\msk'\\
+            \mtk:=(\mtk',\sk)\\
+            \pcreturn (\mpk,\mtk,\msk)
+        }
+        \pcvspace
+        \procedure[space=keep,codesize=\scriptsize]{$\ftkgen(\mtk,\rho)$}{
+            \ \\[-0.85\baselineskip][]
+            \pcparse (\mtk', \sk) :=\mtk\\
+          \pcparse (\sn_1,\dots,\sn_n) :=\sk\\ t\gets\lfloor\log_2(\frac{1}{\rho})\rceil\\
+            \pcreturn \ftk:=(\sn_1,\dots,\sn_t)
+        }
+        \pcvspace
+        \procedure[space=keep,codesize=\scriptsize]{$\sign(\osk,m)$}{
+            \pcreturn \SS.\sign(\osk,m)
+        }
+        \pcvspace
+        \procedure[space=keep,codesize=\scriptsize]{$\verify(\opk,\sigma,m)$}{
+            \pcreturn \SS.\verify(\opk,\sigma,m)
+        }
+        \end{pcvstack}
+        
+        \pchspace
+        \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\opkgen(\mpk)$}{
+            \ \\[-0.85\baselineskip][]
+            \pcparse (\mpk', \pk):=\mpk\\
+            \ftki \gets \pRgv.\enc(\pk, \one)\\
+            \pcreturn (\SS.\opkgen(\mpk'),\ftki)
+        }
+        \pcvspace
+        \procedure[space=keep,codesize=\scriptsize]{$\ftrack(\ftk,\ftki)$}{
+            \ \\[-0.85\baselineskip][]
+            [m_1,\dots,m_{|\ftk|}] \gets\pRgv.\dec(\ftk,\ftki)\\
+            b:=\bigwedge_{i=1}^{|\ftk|} m_i\\
+            \pcreturn b\eqornot 1
+        }
+        \pcvspace
+        \procedure[space=keep,codesize=\scriptsize]{$\track(\mtk,\opk,\tki)$}{
+            \ \\[-0.85\baselineskip][]
+            \pcparse (\mtk',\sk) := \mtk\\
+            \pcreturn \SS.\track(\mtk',\opk,\tki)
+        }
+        \pcvspace
+        \procedure[space=keep,codesize=\scriptsize]{$\oskgen(\msk,\opk,\tki)$}{
+            \pcreturn \SS.\oskgen(\msk,\opk,\tki)
+        }
+        \end{pcvstack}
+    \end{pchstack}
+    \caption{Post-quantum FMD fuzzy tracking}
+    \label{fig:fuzzy-tracking}
+\end{figure}
+
+We provide a lattice-based construction for fuzzy tracking in a standard model. Basically, it is packed Regev encryption with ciphertext compression \cite{TCC:BDGM19}. And this gives us the first post-quantumly ambiguous encryption without relying on random oracles.
+
+
+\smallskip\noindent\textbf{Packed Regev (compressed).}
+We first recall the construction of packed Regev with ciphertext compression~\cite{TCC:BDGM19} in~\cref{fig:packed-regev} of~\cref{sec:security_pqfmd}, where $\chi$ is the error distribution and $B$ is the error bound between $z+c_{2,i}$ and $z+\sn_i^T\cn_1$.
+
+Note that apart from the header ($\cn_1,z$), the payload ($w_i$) are just $n$ bits which is almost as succinct as $\DLog$-based fuzzy message detection scheme $\fmd_2$ in~\cite{CCS:BLMG21}. Specifically, the entire ciphertext is $(\ell+1)\log q+n$-bit large. 
+
+Since $\indcpa$ and $\ikcpa$ security (recalled in~\cref{sec:prelim}) of $\pRgv$ are discussed in prior works already, we focus on its ambiguous security and we show it is actually Uniformly-Ambiguous (recalled in~\cref{sec:prelim}) with super-poly noise-modulus ratio. The formal statement and proof of the lemma below are deferred to~\cref{sec:security_pqfmd}.
+\begin{lemma}
+\label{lem:ambiguous-abs}
+Packed Regev encryption $\pRgv$ with ciphertext compression shown in~\cref{fig:packed-regev} satisfies~\cref{def:ambiguous} and is uniformly-ambiguous $\uniamb$-secure when $\frac{4Bn}{q}$ is $\negl[\secpar]$.
+\end{lemma}
+
+\smallskip\noindent\textbf{The modulus of~\cref{fig:packed-regev}.}
+To argue uniformly-ambiguous security, we need a super-polynomial noise-to-modulus ratio (e.g., 60-bit modulus in our case) which is usually assumed in homomorphic encryption-related works. This is a somewhat stronger assumption since it assumes the lattice problem BDD or GapSVP is hard to even with super-polynomial approximation factor~\cite{STOC:Regev05}.
+
+\smallskip\noindent\textbf{Construction.}
+We then provide a lattice-based fuzzy stealth signature in~\cref{fig:fuzzy-tracking}, which is composed of a standard stealth signature $\SS$ and a compressed packed Regev encryption $\pRgv$ shown above. Basically, it uses the same framework as $\fmd_1$ presented in~\cite{CCS:BLMG21}. 
+
+\smallskip\noindent\textbf{Correctness.} We provide the correctness analysis in~\cref{sec:security_pqfmd}.
+
+
+
+
+Now we consider the false-positive rate $\rho$ when using different fuzzy tracking keys. Since $\cn_1$ looks uniformly random due to LWE assumption, $\sn_i^T\cn_1$ is uniformly random over $\ZZ_q$ by Leftover Hash Lemma as the inner product is a strong randomness extractor. This implies $\lceil\sn_i^T\cn_1+z\rfloor$ is uniformly random over $\bin$ and $\ftrack$ returns $\true$ with probability $2^{-t}\approx \rho$.
+
+\smallskip\noindent\textbf{Security Analysis.}
+ Formal statement and corresponding proof of the following theorem are deferred to~\cref{sec:security_pqfmd}
+
+\begin{theorem}[informal]
+\label{thm:pqfmd-unlink-abs}
+The fuzzy stealth signature constructed in~\cref{fig:fuzzy-tracking} is \emph{unlinkable with key-exposure and fuzzy tracking} if the underlying stealth signature is $\unlinkwke$ and $\pRgv$ is $\uniamb$ and $\ikcpa$ secure. 
+\end{theorem}
+
+We also provide an approach to extend it to a finer false-positive rate as shown in~\cref{sec:security_pqfmd}.
+
+
+\subsection{Scalable Lattice-based Fuzzy Tracking}
+\label{sec:ss-lattice-fuzzy*}
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+        \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\mkgen(\secpar)$}{
+            \pcreturn \SS.\mkgen(\secpar)
+        }
+        \pcvspace
+        
+        \procedure[space=keep,codesize=\scriptsize]{$\ftkgen(\rho,N)$}{
+            \ \\[-0.85\baselineskip][]
+          n := \lceil\log_2 N\rceil\\
+          t := \lceil\rho\cdot 2^n\rceil\\
+          \An\in R_q^{\ell\times \ell}\sample\crs\\
+          (\sn, \en)\sample (B_\eta^{\ell})^2\\
+          \bn:=\An\sn+\en\\
+          \pcreturn \ftk:=(\sn,t), \fpk:=(\bn,\hash_n,t)
+        }
+        \pcvspace
+        
+        \procedure[space=keep,codesize=\scriptsize]{$\ftrack(\ftk,\ftki)$}{
+            \pcparse (\sn,t):=\ftk, (\cn_1, c_2, \delta):=\ftki\\
+            \forall i\in[t]:\\
+            \pcind (\xn^i, \yn^i)\gets \hash(\delta,i)\\
+            x^i,y^i \in R_q\gets\msf{encode}_{R_q}(\xn^i,\yn^i)\\
+            \pcind \cn_1^i:=\cn_1-\frac{q}{2}\cdot (\begin{pcmbox}\begin{bmatrix}x^i\\0\end{bmatrix}\end{pcmbox})\\
+            \pcind w^i:=\lceil\sn^T\cn_1^i- c_2\rfloor_2\oplus y^i\\
+            \hint^i := \msf{decode}_{R_q}(w^i)[:n]\\
+            \pcreturn \lis:=\{\hint^1,\dots,\hint^t\}
+        }
+        \pcvspace
+        
+        \procedure[space=keep,codesize=\scriptsize]{$\sign(\osk,m)$}{
+            \pcreturn \SS.\sign(\osk,m)
+        }
+        %\pcvspace
+
+        \end{pcvstack}
+        
+        \pchspace
+        \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\opkgen(\mpk,\fpk)$}{
+            \ \\[-0.85\baselineskip][]
+            \pcparse (\bn\in R_q^{\ell}, \hash_n,t) := \fpk\\
+            \hint \in\bin^n \gets \hash_n(\mpk)\\
+            \zn\sample\bin^{m-n}\\
+            \wn^T:=[\hint^T\|\zn^T]\\
+            i\sample [t]\\
+            \delta\sample\bin^\secpar\\
+            (\rn,\en_1)\sample(B_\eta^\ell)^2,e_2\sample B_\eta\\
+            (\xn, \yn\in \bin^m)\gets\hash(\delta,i)\\
+            x,y,w \in R_q\gets\msf{encode}_{R_q}(\xn,\yn,\wn)\\
+            \cn_1 := \An^T\rn+\en_1+\frac{q}{2}\cdot\begin{pcmbox}\begin{bmatrix}x\\0\end{bmatrix}\end{pcmbox}\\
+            c_2:=\bn^T\rn+e_2+\frac{q}{2}\cdot(w+y)\\
+            \ftki := (\cn_1, c_2, \delta)\\
+            \pcreturn \SS.\opkgen(\mpk),\ftki \\
+        }
+        %\pcvspace
+        
+        \procedure[space=keep,codesize=\scriptsize]{$\oskgen(\msk,\opk,\tki)$}{
+            \pcreturn \SS.\oskgen(\msk,\opk,\tki)
+        }
+        %\pcvspace
+        
+        \procedure[space=keep,codesize=\scriptsize]{$\track(\mtk,\opk,\tki)$}{
+            \pcreturn \SS.\track(\mtk,\opk,\tki)
+        }
+        \procedure[space=keep,codesize=\scriptsize]{$\verify(\opk,\sigma,m)$}{
+            \pcreturn \SS.\verify(\opk,\sigma,m)
+        }
+        \end{pcvstack}
+    \end{pchstack}
+    \caption{\small Scalable lattice-based fuzzy tracking}
+    \label{fig:fuzzy*-tracking}
+\end{figure}
+
+
+As discussed in~\cref{sec:tech_scalable_fuzzy}, we limit the user's ability to choose a false-positive rate and provide a new framework of fuzzy tracking which is substantially more scalable than prior works\cite{CCS:BLMG21,USENIX:MSSSV22,C:LiuTro22}. 
+Please refer to~\cref{sec:fuzzy*-ss} for functionality and security definitions.
+
+\smallskip\noindent\textbf{Construction.}
+We describe the detailed construction in~\cref{fig:fuzzy*-tracking}, where $\bin^{2m}\gets\hash(k\in\bin^\secpar,i\in[t])$ is a hash function with the seed $k$ and $\hash_n:\bin^{|\mpk|}\mapsto\bin^n$ is another hash function mapping $\mpk$ to a $\hint$ which is used to locate $\mpk$'s mailbox in server's storage. Since it is based on Module-LWE assumption, $R_q$ denotes the ring $Z_q[X]/(X^m +1),$
+and $\msf{encode}_{R_q}:\bin^m \mapsto Z_q[X]/(X^m +1)$ is a function mapping binary strings to the ring elements with binary coefficients; Similarly, $\msf{decode}_{R_q}$ is the reverse operation to map back to a binary string.
+Basically, it is a variant of the underlying IND-CPA encryption of Kyber with a non-prime modulus.
+Though we lose the advantage of NTT multiplications, we can still mitigate this by using Karatsuba and Toom-Cook algorithms. 
+
+
+\smallskip\noindent\textbf{Correctness.}
+It is clear to see that the targeted $\mpk$ must have $\hint:=\hint^i=\hash_n(\mpk)$ appears in $\lis$ with probability $1$: For the targeted index $i\in[t]$, we have $\cn_1^{i}=\An^T\rn+\en_1$ which is the same as standard ciphertext header. The decryption will output $\hint$ directly as long as $q>4B$.
+Now we focus on the other case where $\mpk'\ne\mpk$.
+Firstly, considering $\hint_j\in\lis$, it is decrypted as $$\lceil\sn^T\cn_1^j-c_2\rfloor_2\oplus y^j=\lceil e'+\frac{q}{2}(w+s_1(x^i-x^j)+y^i) \rfloor_2\oplus y^j,$$
+where $s_1$ is the first ring element of $\sn$. $\hint_j$ is uniformly random over $\bin^n$ after rounding $\lceil\cdot\rfloor_2$ as $y^j\oplus y^i$ are outputs of the random oracle $\hash$. 
+Then, for any $\mpk'\ne \mpk$, $\prob{\hash_n(\mpk')=\hint_j}=\frac{1}{2^n}$ since $\hash_n$ is a random oracle, and
+
+\begin{align*}
+    \prob{\hash_n(\mpk')\in\lis}&=\sum_{j=1}^t\prob{\hash_n(\mpk')=\hint_j}\\
+    &=\frac{t}{2^n\approx N}\approx\rho.
+\end{align*}
+
+\smallskip\noindent\textbf{Security Analysis.}
+The formal theorem statements and proof of the following theorems are deferred to~\cref{sec:security_scalable_fuzzy}.
+
+\begin{theorem}[informal]
+\label{thm:scalable-abs}
+The fuzzy scalable stealth signature constructed in~\cref{fig:fuzzy*-tracking} is unlinkable with key exposure and fuzzy tracking if the underlying stealth signature is $\unlinkwke$ and $\mlwe$ holds. It is also \emph{unbiased} and satisfying $\uniubs$ defined in~\cref{def:fuzzy*-tracking-unbias} if $n\le \frac{m}{2}$ where $m$ is a power of $2$ and $B_\eta$ is a centered binomial distribution.
+\end{theorem}
+
+
+
+\section{Performance Analysis}
+\label{sec:implement}
+\subsection{Implementations}
+
+\begin{table*}[!t]
+\renewcommand{\arraystretch}{1.2}
+\caption{Performance Result of Constructions in~\cref{sec:compiler} and~\cref{sec:ss-lattice}}
+\label{tab:implementation}
+\centering
+\begin{threeparttable}  
+\resizebox{\columnwidth}{!}{\begin{tabular}{r *{11}{c}}
+\toprule
+Scheme\tnotex{tn:implement:1} & w/\sf KE & $\hardness$ & $\hardness_q$\tnotex{tn:implement:2}  & $\opk$  & Signature  & $\mkgen$  & $\opkgen$  & $\track$  & $\oskgen$  & $\sign$  & $\verify$\\
+\midrule
+$\name_2$ & $\circ$ & 114 &104  & 2.08 KB & 2.54 KB & 0.068 ms & 0.074 ms & 0.076 ms & 0.078 ms & 0.208 ms & 0.053 ms\\
+
+$\name_3$ & $\circ$ & 171  &155  & 3.04 KB & 3.45 KB & 0.131 ms & 0.137 ms & 0.136 ms & 0.138 ms & 0.377 ms & 0.089 ms\\
+
+$\name_5$ & $\circ$ & 245 &223  & 4.16 KB & 4.81 KB & 0.191 ms & 0.198 ms & 0.202 ms & 0.215 ms & 0.443 ms & 0.145 ms\\
+\midrule
+Dilithium2+$\name_2$ & $\bullet$ & 114 &104 & 2.08 KB & 6.40 KB & 0.070 ms & 0.076 ms & 0.078 ms & 0.358 ms & 0.222 ms & 0.114 ms\\
+
+Dilithium3+$\name_3$ & $\bullet$ & 171 &155  & 3.04 KB & 8.85 KB & 0.129 ms & 0.136 ms & 0.132 ms & 0.597 ms & 0.369 ms & 0.182 ms\\
+
+Dilithium5+$\name_5$ & $\bullet$ & 245 &223  & 4.16 KB & 12.2 KB & 0.186 ms & 0.193 ms & 0.197 ms & 0.762 ms & 0.428 ms & 0.291 ms\\
+\midrule
+Falcon512+$\name_2$ & $\bullet$ & 114 &104  & 2.08 KB & 4.09 KB & 0.069 ms & 0.074 ms & 0.075 ms & 5.458 ms & 0.226 ms & 0.074 ms\\
+
+Falcon1024+$\name_3$ & $\bullet$ & 171 &155  & 3.04 KB & 6.51 KB & 0.133 ms & 0.133 ms & 0.133 ms & 17.7 ms & 0.444 ms & 0.130 ms\\
+
+Falcon1024+$\name_5$ & $\bullet$ & 245 &223  & 4.16 KB & 7.88 KB & 0.194 ms & 0.198 ms & 0.201 ms & 17.5 ms & 0.441 ms & 0.185 ms\\
+\bottomrule
+\end{tabular}}
+ \begin{tablenotes}
+ \scriptsize 
+  \item[1] \label{tn:implement:1} $\name_2$ builds on Dilithium2 and anonymized Kyber512, $\name_3$ builds on Dilithium3 and anonymized Kyber768, \\
+  and $\name_5$ builds on Dilithium5 and anonymized Kyber1024.
+  \item[2] \label{tn:implement:2} $\hardness_q$ indicates the hardness of Quantum Core-SVP whereas $\hardness$ indicates that of Classical Core-SVP.
+\end{tablenotes}
+\end{threeparttable} 
+\end{table*}
+
+\begin{table*}[!t]
+\renewcommand{\arraystretch}{1.2}
+\caption{Performance Result of Constructions in~\cref{sec:ss-lattice-fuzzy} and~\cref{sec:ss-lattice-fuzzy*}}
+\label{tab:implementation-fuzzy}
+
+\centering
+\begin{threeparttable}  
+\resizebox{\columnwidth}{!}{\begin{tabular}{r  *{9}{c}}
+\toprule
+Scheme & $\hardness$ & $\hardness_q$ & $N$ Clients & $\rho$ & Public Key & Fuzzy Tracking Info & Setup Time & $\opkgen$\tnotex{tn:impl-fuzzy:1} & $\ftrack$\tnotex{tn:impl-fuzzy:2}\\
+\midrule
+Post-quantum FMD & 104 & 94 & $2^{20}$ & $2^{-10}$ &  345.6 KB & 17.2 KB & 108.8 ms & 75.13 ms & 11.74 sec\\
+
+Post-quantum FMD & 104 & 94 & $2^{30}$ & $2^{-15}$ & 518.4 KB & 17.2 KB & 124.3 ms & 74.64 ms & 4.772 hour\\
+\midrule
+Scalable Fuzzy Tracking  & 115 & 104 & $2^{20}$ & $2^{-10}$ & 800 B & 800 B & 0.011 ms & 0.0148 ms & 3.424 ms \\
+
+Scalable Fuzzy Tracking  & 115 & 104 & $2^{30}$ & $2^{-15}$ & 800 B & 800 B & 0.011 ms & 0.0149 ms & 108.77 ms\\
+\bottomrule
+\end{tabular}}
+ \begin{tablenotes}
+ \scriptsize 
+  \item[1] \label{tn:impl-fuzzy:1} Only consider the fuzzy part, i.e., the time to generate the fuzzy tracking information, $\ftki$.
+    \item[2] \label{tn:impl-fuzzy:2} The server's running time for each incoming $\ftki$. \\
+    For Post-quantum FMD, we calculate the time to run $\ftrack$ for all of clients (recipients).
+\end{tablenotes}
+\end{threeparttable}  
+\end{table*}
+
+We present the performance result in~\cref{tab:implementation} and~\cref{tab:implementation-fuzzy}. The open source code can be checked at~\cite{implementation}.
+
+For $\name$ in~\cref{sec:ss-lattice}, similar to Dilithium, we denote the scheme with three security levels as $\name_2$, $\name_3$, and $\name_5$. Parameters are the same as Dilithium's, except that our $\beta,\gamma_1,\gamma_2$ are doubled. Moreover, we use a variant of Kyber in $\name$: Replacing the original FO transform of Kyber with the one suggested in~\cite{EC:GruMarPat22} which makes Kyber $\anocca$-secure.
+For Post-quantum FMD in~\cref{sec:ss-lattice-fuzzy}, to get $104$-bit computational security and $40$-bit statistical security, we choose $q=2^{60}, \ell=2304$ and $\chi=B_\eta$ is binomial distribution with parameter $\eta=3$. 
+For Scalable Fuzzy Tracking in~\cref{sec:ss-lattice-fuzzy*}, to get $115$-bit security and negligible failure probability, we choose $q=4096$, other parameters are the same as Kyber512, specifically, we have $m=256, \eta=3, \ell=2.$
+
+We run the implementation on a regular laptop: Macbook Air (M1 2020) with 8GB RAM and 2.1 GHz CPU (Turbo 3.2 Ghz). Note that our implementation is based on the reference implementation of Dilithium, Kyber, and Falcon, without using AES or AVX optimization. We run each test $10000$ times to calculate its average running time. For Post-quantum FMD, we run tests $100$ times to average the running time.
+
+Experimental results show that Falcon512+$\name_2$ yields the smallest signature size (4.09 KB) for security against key exposures with a decent hardness level ($114$-bit security). And Scalable Fuzzy Tracking yields the smallest communicational cost (800 Bytes) and server's computational overhead (3.4 ms) for millions of clients.
+
+\subsection{Prior Works}
+We also present tables for comparison with prior works in~\cref{tab:ss-comparison-prior-works} and~\cref{tab:fuzzy-comparison-prior-works}.
+
+In~\cref{tab:ss-comparison-prior-works} we compare our group-based stealth signature (~\cref{sec:group-bounded}), $\name_2$ (\cref{sec:ss-lattice}), $\name_2$ +Dilithium2, and $\name_2$ +Falcon512 with prior works.
+We would like to stress that~\cite{ESORICS:LLNYY20} is a theoretical work without giving concrete parameters. We estimate the number as follows: According to Lemma 5 in Section 2.2, it requires $m \ge 6n\log q$, and according to Section 3.4, it requires $q=\tilde{O}(m^{5/2})\cdot\mathsf{superpoly}(\log m)$. Concretely, if we choose the security parameter $n=2^{10}$ which is the case in our thesis, a typical choice for~\cite{ESORICS:LLNYY20} to satisfy all of the above conditions is $n=2^{10}, m=2^{18}, q=2^{50}$.
+
+If we want to improve their work with recent advancement in NTRU, note that the techniques used in~\cite{ESORICS:LLNYY20} is from~\cite{EC:AgrBonBoy10} which implies HIBE. Though combining it with NTRU could improve its efficiency, however, it is highly likely to have similar parameters as the state of the art about NTRU-based HIBE~\cite{EPRINT:ZMSSO21}. Thus we estimate numbers here with parameters from \cite{EPRINT:ZMSSO21} for 80-bit security since they only have two levels of security (80-bit or 160-bit). 
+
+In~\cref{tab:fuzzy-comparison-prior-works} we compare our Post-quantum FMD (\cref{sec:ss-lattice-fuzzy}) and Scalable Fuzzy Tracking (\cref{sec:ss-lattice-fuzzy*}) with prior works about message detection or retrieval. All of the works assume the semi-honest server, except that $\Pi_\msf{TEE}$ also considers the malicious server.
+Note that for security, $\rho$ needs to be as large as $\frac{1}{\sqrt{N}}$ as calculated in~\cite{EPRINT:SerPejBur21}. Also, some prior works consider fuzzy schemes (\cite{CCS:BLMG21} and ours) are $\rho M$-anonymity where $M$ is the number of total messages. However, it is not accurate due to statistical attacks as shown in~~\cite{EPRINT:SerPejBur21}: If there is only one message ($M=1$), it still has some extent of anonymity if $N$ is large.
+
+Regarding the server's work, we compare a single server with a single thread as all of the works (except for $\Pi_\msf{GC}$) supporting distributed servers or parallelized threads. \cite{CCS:BLMG21} actually needs to run their $\msf{test}$ functionality for each recipient's detection key for each incoming message. Other schemes with full privacy inherently require $O(N)$ work for the server otherwise it will leak information.
+
+Latency per message is dominated by the server's computational time. Assuming there are $N=2^{20}$ clients (millions of users is a legit assumption for cryptocurrency~\cite{users}). Set false-positive rate $\rho=2^{-10}$ for~\cite{CCS:BLMG21} and ours. The numbers of others are taken from their paper directly. Assuming $10-20$ messages per second (e.g., Bitcoin or Ethereum), only ours is practical with many users.
+To compute each recipient's computational time, we assume there are $M=500,000$ messages in total (which is roughly the number of transactions of Bitcoin or Ethereum per day). We let fuzzy tracking schemes run $\track$ (shown in~\cref{def:SS}) for each message retrieved.
+
+
+
+
+\section{Security Analysis}\label{sec:compiler_proof}
+\noindent\textbf{Proof of Theorem~\ref{thm:compiler}}
+We restate the theorem here more formally for the case of unforgeability.
+\begin{theorem}
+\label{thm:compiler-unforge}
+The stealth signature $\SS_\mathsf{w}$ constructed in~\cref{sec:compiler} is secure in $\seufcmawke$ experiment if $\SS_\mathsf{w/o}$ is $\eufcmawoke$ secure and $\DS$ is $\seufcma$ secure. Specifically, for any $\secpar\in\NN$, and for any PPT adversary $\Ac$, if it succeeds in the experiment $\seufcmawke$, then there are other adversaries $\Bc_1,\Bc_2$ running in roughly same time such that$$
+\advantage{\seufcmawke}{\secpar}[(\Ac)] \le \advantage{\eufcmawoke}{\secpar}[(\Bc_1)] + \advantage{\seufcma}{\secpar}[(\Bc_2)].
+$$
+\end{theorem}
+
+
+\begin{proof}
+We prove the theorem by reduction. Suppose there's an adversary $\Ac$ has a non-negligible advantage in $\seufcmawke$, then we can construct another adversary $\Bc$ to win the experiment $\eufcmawoke$ of $\SS_\mathsf{w/o}$ or the experiment $\seufcma$ (strong unforgeability) of $\DS$ as follows. $\Bc$ forwards $\mpk,\mtk$ from the challenger in $\eufcmawoke$ to $\Ac$. 
+
+To simulate $\oskgen\Oc(i,\opk^i,\tki^i,\flag^i)$, if $\flag^i=\true$, $\Bc$ runs $(\vk^i,\sk^i)\gets\DS.\gen$, then queries $\sigma^i_1\gets\sign\Oc(\vk^i)$ in $\eufcmawoke$ and returns $\osk^i:=(\sigma^i_1,\vk^i,\sk^i)$ to $\Ac$; If $\flag^i=\false$, $\Bc$ asks a challenger $\Cc^i$ in $\seufcma$ of $\DS$ to send a challenge verification key $\vk^i$, then queries $\sigma_1^i\gets\sign\Oc(\vk^i)$ in $\seufcmawoke$ of $\SS_\mathsf{w/o}$ and stores $\sigma_1^i$; If $\OK[i]=(\opk^i,\cdot,\cdot)\wedge\flag^i=\true$, $\Bc$ signals $\Cc^i$ to terminal the experiment and asks for its $\osk^i$ then forwards that to $\Ac$.
+To simulate $\sign\Oc(i,m^j)$, $\Bc$ queries $\sigma_2^j\gets\sign\Oc(m^j||\sigma_1^i)$ and returns $\sigma^j:=(\sigma_1^i,\sigma_2^j,\vk^i)$ to $\Ac$. 
+
+Once $\Ac$ submits some valid forgery $\sigma':=(\sigma'_1,\sigma'_2,\vk'),m',i'$ as shown in~\cref{fig:experiment_forge_with_key_exposure}, $\Bc$ behaves in following cases:
+\begin{itemize}
+    \item If $m'$ is not appeared in $Q$ (recall that $Q$ is the set to record signing queries), $\Bc$ forwards $\sigma'_2, m'||\sigma'_1$ to $i'$-th challenger in $\seufcma$ of $\DS$;
+    \item If $\vk'$ is not appeared in $Q$, $\Bc$ forwards $\sigma'_1, \vk'$ to the challenger in $\eufcmawoke$ of $\SS_\mathsf{w/o}$;
+    \item If both $m',\vk'$ are in $Q$, then the only case that $\sigma'$ is a valid forgery is either $\sigma'_1$ or $\sigma'_2$ not appeared in $Q$. In either case, $\Bc$ just forwards $\sigma'_2, m'||\sigma'_1$ to the challenger in $\seufcma$ of $\DS$. 
+\end{itemize}
+This completes the proof.
+
+\end{proof}
+
+We restate the theorem here for unlinkability.
+\begin{theorem}
+\label{thm:compiler-unlink}
+The stealth signature $\SS_\mathsf{w}$ constructed in~\cref{sec:compiler} is secure in $\unlinkwke$ experiment if $\SS_\mathsf{w/o}$ is $\unlinkwoke$ secure.
+Specifically, for any $\secpar\in\NN$, and for any PPT adversary $\Ac$, if it succeeds in the experiment $\unlinkwke$, then there are other adversaries $\Bc$ running in roughly same time such that$$
+\advantage{\unlinkwke}{\secpar}[(\Ac)] \le \advantage{\unlinkwoke}{\secpar}[(\Bc)].
+$$
+\end{theorem}
+\begin{proof}
+Similarly, we can also prove this theorem easily by reduction. Suppose there's an adversary $\Ac$ has a non-negligible advantage in $\unlinkwke$, then we can construct another adversary $\Bc$ to win the experiment $\unlinkwoke$ of $\SS_\mathsf{w/o}$ as follows. $\Bc$ forwards $\mpk_0,\mpk_1,\opk_b,\tki_b$ from the challenger in $\unlinkwoke$ to $\Ac$. To simulate $\osk_b$, $\Bc$ runs $\DS.\gen$ to get $(\vk,\sk)$, then queries the signing oracle via $\sign\Oc(\cdot, -1, \vk)$ from $\unlinkwoke$ to learn a signature $\sigma_1$ of $\vk$, then returns $\osk_b:=(\sigma_1,\vk,\sk)$ to $\Ac$.
+To simulate $\oskgen\Oc$, $\Bc$ queries $\sign\Oc$ and runs $\DS.\gen$ as above to generate $\osk$. Once $\Ac$ submits $b'$, $\Bc$ simply forwards $b'$ as its final guess. This completes the proof.
+
+\end{proof}
+
+
+\subsection{Security Analysis of Stealth Signature Without Fuzzy Tracking}\label{sec:security_spirit}
+
+\noindent\textbf{Proof of Lemma~\ref{lem:ufnmawoke-abs}}
+We restate the lemma formally here.
+
+\begin{lemma}
+\label{lem:ufnmawoke}
+$\name$ in~\cref{fig:ss-lattice} is unforgeable without key exposure under no-message attacks. Specifically, in random oracle model, for any $\secpar\in\NN$, for any adversary $\Ac$, if $\Dil$ has parameters $\beta,\gamma_1,\gamma_2$, and we denote $\hash'$ as a random oracle can be accessed by $\Ac$ and $\Bc_2$, then the advantage to win the game $\ufnmawoke^\Ac(\secpar)$ is
+\begin{align*}
+    \advantage{\ufnmawoke}{\secpar,\hash',\gamma_1,\gamma_2,\beta}[(\Ac)] & \le 
+    \advantage{\mlwe}{k,\ell,D}[(\Bc_1)] & + \advantage{\selfmsis}{\hash',k,\ell+1,\zeta}[(\Bc_2)].
+\end{align*}
+\end{lemma}
+
+\begin{proof}
+Consider the experiment $\eufcmawoke$ in~\cref{fig:experiment_forge_without_key_exposure} where the $\sign\Oc$ is forbidden to access. Suppose $\Ac$ forges $\sigma*$, then we have the following claim.  
+
+\begin{claim}
+If an adversary $\Ac$ can forge $\sigma^*$ without accessing $\sign\Oc$ and assuming $\mlwe_{k,\ell,D}$ assumption holds, then there is another adversary $\Bc_2$ who solves $\selfmsis_{\hash',k,\ell+1,\zeta}$ in roughly same time with non-negligible probability.
+\end{claim}
+\begin{proof}
+After receiving uniformly random samples $(\An,\tn)$ $\in R^{k\times\ell}\times R^{k}$ and random oracle access $\hash'(\cdot)$ from the challenger in $\selfmsis_{\hash',k,\ell+1,\zeta'+\beta}$, $\Bc_2$ computes $\mpk:=(\An,\tn,\ek)$, $\mtk:=(\dk,\tn)$ and forwards $\mpk,\mtk,\hash'$ to $\Ac$.  As long as the $\mlwe_{k,\ell,D}$ assumption holds, $\mpk$ looks indistinguishable from real public key for $\Ac$. For $i$-th query in $\oskgen\Oc$, $\Bc_2$ computes and stores $\sn^i_1,\sn^i_2$.
+Once $\Ac$ submits some valid forgery $\sigma^*$ with $i^*$, meaning it finds some $(\xn,\zn,c)$ for $\opk^*:=\tn^*$  such that 
+$$\hash'\left( \mu\, \Vert\, [\In_k | \An | \tn^*]\cdot \begin{bmatrix}\xn\\ \zn\\ c\end{bmatrix}\right)=c, $$
+where $\norm{\xn}_\infty\le 2\gamma_2+1+2^{d-1}\tau, \norm{\zn}_\infty \le\gamma_1-2\beta$ and $\norm{c}_\infty = 1$\cite{NISTPQC-R3:CRYSTALS-DILITHIUM20}.
+Then $\Bc_2$ can retrieve $\sn_1^*,\sn_2^*$ from its storage and instantly return
+$\yn:=\begin{bmatrix}\xn'\\ \zn'\\ c \end{bmatrix}, \mu$ to the $\selfmsis_{\hash',k,\ell+1,\zeta}$ challenger, where $\xn':= \xn+c\sn_2^*$ and  $\zn':=\zn+c\sn_1^*$. 
+Note that $\norm{c\sn_1^*},\norm{c\sn_2^*}\le\beta$. Since we can write $\tn^*:=\tn+\An\sn_1^*+\sn_2^*$, it is easy to check that this is a valid solution
+$$\hash'\left( \mu\, \Vert\, [\In_k | \An | \tn]\cdot\begin{bmatrix}\xn+c\sn_2^*\\ \zn+c\sn_1^*\\ c \end{bmatrix}\right)=c
+$$
+where $\norm{\yn}_\infty\le \zeta$ and $\zeta:=\max\{\gamma_1-\beta, 2\gamma_2+1+2^{d-1}\tau+\beta\}$.
+\end{proof}
+
+
+This completes the proof to show it is secure in the $\ufnmawoke$ experiment.
+\end{proof}
+
+\noindent\textbf{Proof of  Theorem~\ref{thm:ss-woke-abs}}
+We restate the theorem for unforgeable without key exposures formally here.
+\begin{theorem}
+\label{thm:eufcmawoke}
+$\name$ in~\cref{fig:ss-lattice} is existential unforgeable without key exposures. Specifically, for any adversary $\Ac$, if it succeeds in the experiment $\eufcmawoke$, then there is another adversary $\Bc$ running in roughly same time such that
+\begin{align*}
+  \advantage{\eufcmawoke}{\secpar,\hash,\gamma_1,\gamma_2,\beta}[(\Ac)]  \le \advantage{\ufnmawoke}{\secpar,\hash',\gamma_1,\gamma_2,\beta}[(\Bc)]  + \negl[\secpar],
+\end{align*}
+where we denote $\hash',\hash$ as random oracles can be accessed by $\Bc_1$ and $\Ac$, respectively.
+\end{theorem}
+
+\begin{proof}
+Intuitively, a reduction from CMA to NMA usually needs ``patching'' random oracles \cite{EC:KilLyuSch18,EC:AFLT12}. We prove this theorem in a sequence of hybrid games as follows.
+
+\noindent\textbf{$\hyb_0$:} This is exactly the standard $\eufcmawoke$ experiment. Thus we have $$\Pr[\hyb_0\Rightarrow 1] = \advantage{\eufcmawoke}{\secpar,\hash,\gamma_1,\gamma_2,\beta}[(\Ac)].$$
+
+\noindent\textbf{$\hyb_1$:} We modify $\hyb_0$ as follows. In $\oskgen\Oc(\opk^i,\tki^i)$, for $i$-th query, if $\true\gets$ $\track($ $\mtk,$ $\opk^i,\tki^i)$ it only stores $\sn^i_1,\sn^i_2, \tn^i:=\An\sn_1^i+\sn_2^i+\tn$, sets $\osk^i:=\top$ and returns $1$. In $\sign\Oc(i, m^j)$, for $j$-th query, it generates and sets $\osk^i$ by $\msk$ if $\osk^i:=\top$, then return a signature $\sigma^j$ by using $\osk^i$. 
+
+This game only changes the time to generate $\osk^i$, thus advantage remains the same: $$|\Pr[\hyb_1\Rightarrow 1] - \Pr[\hyb_0\Rightarrow 1]| = 0.$$
+
+\noindent\textbf{$\hyb_2$:} We update $\hyb_1$ by modifying $\sign\Oc(i, m^j)$ in $j$-th query: Instead of generating $\sigma^j$ with $\osk^i$ when needed, it just simulates $\sigma^j$  by choosing uniformly random $(\zn^j, c^j)\in S^\ell_{\gamma_1-2\beta-1}\times B_\tau$ and stores a key-value pair $\langle\mu^j: (c^j,\wn_1^j)\rangle$ where $\mu^j\gets\Gs(m^j||\tn^i)$, $\wn_1^{\mu^j} \gets \highbits_q(\An\zn^j-c^j\tn^i, 2\gamma_2)$, and $\Gs$ is a perfect random function. We also use a new random oracle $\hash(\wn_1 || \mu)$ to simulate random oracle $\hash'(\wn_1 || \mu)$ in above game as shown in left part of~\cref{fig:programmed-random-oracle}.
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+    \procedure[space=keep,codesize=\scriptsize]{$\hash(\wn_1 || \mu)$}{
+    \pccomment{in $Hyb_2$ and $Hyb_3$}\\
+    \text{Retrieve } \langle\mu: (c^{\mu}, \wn_1^\mu\rangle \text{ for } \mu\\
+    \pcif \wn_1 = \wn_1^\mu\\
+    \pcind\pcthen \pcreturn c:=c^{\mu}\\
+    \pcelse \pcreturn c:=\hash'(\wn_1 || \mu)\\
+    }
+    \pchspace
+    \procedure[space=keep,codesize=\scriptsize]{$\eufcmawoke^\adv(\secpar)$}{
+    (\mpk, \msk, \mtk) \gets \mkgen(\secpar)\\
+    \OK := [], Q := \emptyset\\
+    (m^*, \sigma^*, i^*) \gets \adv^{\oskgen\oracle, \sign\oracle}(\mpk,\mtk) \\
+    (\opk^*:=\tn^*, \osk^*, \cdot) := \OK[i^*]\\
+    \pccomment{$Hyb_3$ block begins}\\
+    (\zn^*,c^*,\hn^*) := \sigma^*\\
+    \mu^*\gets\Gs(m^*||\tn^*)\\
+    \wn_1^*\gets \highbits_q(\An\zn^*-c^*\tn^*,2\gamma_2)\\
+    \pcif \hash'(\wn_1^*||\mu^*)\neq c^*\\
+    \pcind\pcthen \pcreturn 0\\
+    \pccomment{$Hyb_3$ block ends}\\
+    b_0 := (m^*, i^*) \notin Q\\
+    b_1 := \verify(\opk^*, m^*, \sigma^*) = 1\\
+    b_2 := (\OK[i^*] \ne (\cdot, \cdot, \bot))\\
+    \pcreturn b_0 \land b_1 \land b_2
+    }
+    \end{pchstack}
+\caption{Simulated $\hash$ and $\eufcmawoke^\adv(\secpar)$ in $\hyb_2$ and $\hyb_3$}
+\label{fig:programmed-random-oracle}
+\end{figure}
+Now we analyze the advantage. In our construction, $\Dil.\sign$ remains unaltered, thus the resulting signature $\sigma$ is still perfectly zero-knowledge (where the exact simulation is shown in $\sign$ of~\cref{fig:programmed_sign}).
+Therefore the distribution of each $\sigma$ is exactly the same as the one in $\hyb_1$, then we have
+$$|\Pr[\hyb_2\Rightarrow 1] - \Pr[\hyb_1\Rightarrow 1]| = 0.$$
+
+\noindent\textbf{$\hyb_3$:} We modify the above game by adding an additional block in $\eufcmawoke$ as shown in the right part of~\cref{fig:programmed-random-oracle}. This game only differs from the $\hyb_2$ if $\wn_1^*= \wn_1^{\mu^*}$ and $\left((m^*,\cdot,i^*)\notin Q\right)\wedge b_1\wedge b_2$ ($\hyb_3$ return $0$ and $\hyb_2$ return $1$). However,
+$\Ac$ didn't query $\sign\Oc(i^*, m^*)$ before, thus $\wn_1^{\mu^*}$ should remain hidden. And from \cite{EC:KilLyuSch18}, it shows that $\Dil$ signature has enough min-entropy, thus the probability $\Pr[\wn_1^*= \wn_1^{\mu^*}]$ is negligible, i.e., 
+$$|\Pr[\hyb_3\Rightarrow 1] - \Pr[\hyb_2\Rightarrow 1]| \le \negl[\secpar].$$
+
+
+This game can be fully simulated by $\Bc$ against $\ufnmawoke$ as follows. $\Bc_1$ simulates $\oskgen\Oc$, $\sign\Oc$ oracles without knowing $\msk$, and it patches $\hash'$ from $\ufnmawoke$ to $\hash$ for generating $\sigma^i$. Once $\Ac$ submits a valid signature $\sigma^*$ and if $\hash'$ works well in $\sigma^*$, $\Bc$ directly forwards $\sigma^*$ to the challenger of $\ufnmawoke$.
+Therefore $$\Pr[\hyb_3\Rightarrow 1]=\advantage{\ufnmawoke}{\secpar,\hash',\gamma_1,\gamma_2,\beta}[(\Bc_1)]$$
+and we complete the proof.
+\end{proof}
+
+
+We state the theorem for unlinkable without key exposures formally here.
+\begin{theorem}
+\label{thm:unlinkwoke}
+$\name$ in~\cref{fig:ss-lattice} is unlinkable without key exposures. Specifically, for any adversary $\Ac$, if it succeeds in the experiment $\unlinkwoke$, then there are other adversaries $\Bc_1,\Bc_2$ running in roughly same time such that
+\begin{align*}
+  \advantage{\unlinkwoke}{\secpar,\hash,\gamma_1,\gamma_2,\beta}[(\Ac)]  &\le \advantage{\anocca}{\secpar}[(\Bc_1)] + \advantage{\mlwe}{k,\ell,D}[(\Bc_2)].
+\end{align*}
+where we denote $\hash$ as a random oracles can be accessed by $\Ac$ and $\gamma_1,\gamma_2,\beta$ are parameters of the underlying $\Dil$ scheme.
+\end{theorem}
+\begin{proof}
+We prove the theorem in a sequence of hybrid games.
+
+\noindent\textbf{$\hyb_0$:} This is the original $\unlinkwke$ experiment, thus we have
+$$\Pr[\hyb_0\Rightarrow 1]=\advantage{\unlinkwoke}{\secpar,\hash,\gamma_1,\gamma_2,\beta}[(\Ac)].$$
+
+\noindent\textbf{$\hyb_1$:} We modify the above game by changing the function $\sign(\osk,m^j)$ in $\unlinkwoke$ experiment to the $\sign(\opk^i,m^j)$ without using $\osk$ in~\cref{fig:programmed_sign}.  Specifically, it samples uniformly random $(\zn^j,c^j)$, programs the random oracle such that $\hash(\mu^j||\wn^j_1)=c^j$ where $\mu^j$ is determined by $m^j$ and $\wn^j_1:=\highbits(\An\zn^j-c^j\tn^i, 2\gamma_2)$.  Then set $\sigma^j:=(\zn^j,c^j,\hn^j)$ where $\hn^j$ can be determined by $c^j,\tn^i,\zn^j$. 
+Because of the perfectly zero-knowledge of $\sigma^j$, the distribution of signatures in this hybrid is the same as the one in $\hyb_0$, i.e.,
+$$\left| \Pr[\hyb_0\Rightarrow 1]-\Pr[\hyb_1\Rightarrow 1] \right| = 0.
+$$
+
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+        \procedure[space=keep]{$\sign(\opk^i, m^j)$}{
+        \pccomment{in $Hyb_1$ and $Hyb_2$}\\
+        \pcparse \tn^i:=\opk^i\\
+        (\zn^i,c^i) \sample S^\ell_{\gamma_1-2\beta_1}\times B_\tau\\
+        \mu^i\gets\Gs(m^j||\tn^i)\\
+        \wn^i_1\gets \highbits_q(\An\zn^i-c^i\tn^i, 2\gamma_2)\\
+        \text{Program $\hash$ s.t. } \hash(\wn^i_1||\mu^i_1):=c^i\\
+        \hn^i \gets \makehint_q(-c^i\tn^i_0,\An\zn^i-c^i\tn^i+c^i\tn^i_0, 2\gamma_2)\\
+        \pccomment{$\tn^i_0$ are lower bits of $\tn^i$}\\
+        \pcreturn \sigma^i:=(\zn^i,c^i,\hn^i)
+    }
+    \end{pchstack}
+    \caption{Simulation of $\sign$ from $\hyb_1$ to $\hyb_2$}
+    \label{fig:programmed_sign}
+\end{figure}
+
+
+\noindent\textbf{$\hyb_2$:} We modify the above game as follows. Parse $\mpk_0:=(\tn_0,\ek_{1,0})$ and $\mpk_1:=(\tn_1,\ek_{1,1})$, instead of generating $\tn_0,\tn_1$ from $\msk$, we sample uniformly random $(\tn_0,\tn_1)\sample R^k_q\times R^k_q$. 
+By $\mlwe_{k,\ell,D}$ assumption, we know this hybrid only differs from $\hyb_1$ by:
+$$\left| \Pr[\hyb_2\Rightarrow 1]-\Pr[\hyb_1\Rightarrow 1] \right| \le \advantage{\mlwe}{k,\ell,D}[(\Bc_2)].
+$$
+
+Besides, this hybrid can be fully simulated by an adversary $\Bc_1$ of $\anocca$ experiment. $\Bc_1$ simulates the random oracle $\hash$ for $\Ac$. Upon receiving $\ek_0,\ek_1$ and $(C_b, K_b)$ from $\anocca$ experiment, $\Bc_1$ sets $\mpk_0:=(\tn_0,\ek_0)$ and $\mpk_1:=(\tn_0,\ek_1)$ where $(\tn_0,\tn_1)\sample R^k_q\times R^k_q$ are uniformly sampled. $\Bc_1$ sets $\tki_b:=C_b, \osk_b:=\top, \opk_b\sample R^k_q$, and sends $(\mpk_0,\mpk_1,\tki_b,\opk_b)$ to $\Ac$ of $\hyb_2$.
+For each query of $\oskgen\Oc(b^*,\opk^i,\tki^i)$, $\Bc_1$ queries $K^i\gets$ $\kem.$ $\decaps\Oc(b^*, \tki^i)$ to check if $\An\sn^i_1+\sn^i_2+\tn_{b^*}=\opk^i$ where $\sn^i_1,\sn^i_2\gets\Dil.\expands(K^i)$. If the check doesn't pass, set $\osk^i_{b^*}:=\perp$; Otherwise set $\osk^i_{b^*}:=\top$.
+For each query of $\sign\Oc(b^*,i,m^j)$, $\Bc_1$
+simulates the signature $\sigma^j$ by using $\opk^i_{b^*}$ if the corresponding $\osk^i_{b^*}=\top$, otherwise return $\perp$. If $i=-1$, just simulates a signature using $\opk_b$.
+
+Then $\hyb_2$ can be simulated without knowing any $\msk,\mtk$ or $b$. Once $\Ac$ returns $b'$, $\Bc_1$ simply forwards $b'$ to the challenger of $\anocca$.
+Thus we have
+$$\Pr[\hyb_2\Rightarrow 1] = \advantage{\anocca}{\secpar}[(\Bc_1)],
+$$
+and this completes the proof.
+\end{proof}
+
+
+\subsection{Analysis of Post-quantum FMD}\label{sec:security_pqfmd}
+\begin{figure}[!t]
+    \centering
+    \begin{pchstack}[boxed]
+        \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\pRgv.\gen(\secpar, n)$}{
+            \ \\[-0.85\baselineskip][]
+            \An\in\ZZ_q^{\ell \times \ell} \sample\crs\\
+            (\Sn, \En)\sample (\chi^{\ell\times n})^2\\
+            \Bn:=\An\Sn+\En\\
+            \pcreturn \pk:=\Bn, \sk:=\Sn
+        }
+        \pcvspace
+        \procedure[space=keep,codesize=\scriptsize]{$\pRgv.\dec(\sk, \ct)$}{
+            \pcparse (\cn_1,z,w_1,\dots,w_n) := \ct\\
+            \pcparse (\sn_1,\dots,\sn_t):=\sk\\
+            \forall i\in [t], m_i:=\lceil\sn_i^T\cn_1+z\rfloor_2\oplus w_i \\
+            \pcreturn \mn:=[m_1,\dots,m_t]
+        }
+        \end{pcvstack}
+        
+        \pchspace
+        \begin{pcvstack}
+        \procedure[space=keep,codesize=\scriptsize]{$\pRgv.\enc(\pk, \mn\in\bin^n)$}{
+            \ \\[-0.85\baselineskip][]
+            (\rn, \en_1)\sample (\chi^\ell)^2, \en_2\sample \chi^n\\
+            \cn_1:=\An^T\rn+\en_1\\
+            \cn_2:= \Bn^T\rn+\en_2+\frac{q}{2} \cdot \mn\\
+            z\sample\ZZ_q \text{ such that } \forall i\in[n]: \\
+            z+c_{2,i}\notin [\frac{q}{4}-B,\frac{q}{4}+B]\cup\\ \quad\quad\quad[\frac{3q}{4}-B,\frac{3q}{4}+B]\\
+            \forall i\in [n],  w_i:=\lceil z+c_{2,i}\rfloor_2\\
+            \pcreturn \ct:=(\cn_1,z,w_1,\dots,w_n)
+        }
+        \end{pcvstack}
+    \end{pchstack}
+    \caption{Packed Regev encryption $\pRgv$ with ciphertext compression}
+    \label{fig:packed-regev}
+\end{figure}
+
+
+\smallskip\noindent\textbf{Correctness.}
+\label{sec:correct-fuzzy-tracking}
+We show the scheme in~\cref{fig:fuzzy-tracking} satisfies~\cref{def:fuzzy-tracking-correct} as follows. 
+For each $i\in [t]$, we have $\lceil\sn_i^T\cn_1+z\rfloor_2\oplus w_i=1$. Since $c_{2,i}-\sn_i^T\cn_1=\frac{q}{2} + e'$ where $e'\in [-B,B]$ is some short error, we have $c_{2,i}-e'=\sn_i^T\cn_1+\frac{q}{2}$. Also, we choose 
+$$c_{2,i}+z\notin [\frac{q}{4}-B,\frac{q}{4}+B]\cup [\frac{3q}{4}-B,\frac{3q}{4}+B],
+$$ thus we have $\lceil c_{2,i}+z\rfloor_2=\lceil c_{2,i}+z-e'\rfloor_2$, which implies $w_i=\lceil\sn_i^T\cn_1+z+\frac{q}{2} \rfloor_2=\lceil\sn_i^T\cn_1+z\rfloor_2\oplus 1$. Therefore, with correct $\ftk$, $\ftrack$ always returns $\true$. Note that for correctness, we require $q>4Bn$.
+
+
+\smallskip\noindent\textbf{Security Analysis.}
+We show the scheme in~\cref{fig:fuzzy-tracking} is unlinkable with key-exposure and fuzzy tracking (\cref{def:unlink-with-key-fuzzy}).
+
+\noindent\textbf{Proof of  Lemma~\ref{lem:ambiguous-abs}
+and~\cref{thm:pqfmd-unlink-abs}}
+We restate the formal lemma here.
+\begin{lemma}
+\label{lem:ambiguous}
+Packed Regev encryption $\pRgv$ with ciphertext compression shown in~\cref{fig:packed-regev} satisfies~\cref{def:ambiguous} and is uniformly-ambiguous $\uniamb$-secure when $\frac{4Bn}{q}$ is $\negl[\secpar]$. Specifically, we have
+$$\advantage{\uniamb}{\secpar}[(\Ac)]\le\advantage{\lwe}{\ell,q}[(\Ac)] + \frac{4Bn}{q},
+$$
+where $B$ is the bound such that $\norm{\Sn^T\cn_1-\cn_2}_\infty \mod \frac{q}{2} < B$.
+\end{lemma}
+\begin{proof}
+To see it is uniformly ambiguous, firstly note that $\cn_1$ looks uniformly random due to LWE assumption, and $w_i$ is uniformly random due to $m_i$ being a uniformly random bit in the experiment in~\cref{fig:experiment_ambiguous}. For $z$, the statistical distance between its distribution and uniformly random distribution over $\ZZ_q$ is $\frac{4Bn}{q}$. Thus as long as $\frac{4Bn}{q}\le\negl[\secpar]$, we can simulate the entire ciphertext without knowing $b$ or $\sk$.
+\end{proof}
+
+We restate the theorem formally here.
+\begin{theorem}
+\label{thm:pqfmd-unlink}
+The fuzzy stealth signature constructed in~\cref{fig:fuzzy-tracking} is \emph{unlinkable with key exposure and fuzzy tracking}. Specifically, for any $\secpar, n, t$ where $n\ge t$, if there is a PPT adversary $\Ac$ has non-negligible advantage in experiment defined in~\cref{fig:experiment_unlink_with_key_exposure_fuzzy}, then there exist other adversaries $\Bc_1,\Bc_2,\Bc_3$ running in roughly same time such that:
+\begin{align*}
+  \advantage{\unlinkfwke}{\secpar,n,t}[(\Ac)]  &\le 2\advantage{\unlinkwke}{\secpar}[(\Bc_1)] + \\   p(\secpar)\cdot\big(& 4t\advantage{\uniamb}{\secpar}[(\Bc_2)] + (n-t)\advantage{\ikcpa}{\secpar}[(\Bc_3)]\big),
+\end{align*}
+where $p(\secpar)$ is some polynomial on security parameter $\secpar$.
+\end{theorem}
+\begin{proof}
+Combined with~\cref{lem:ambiguous}, recall Theorem 11 and Lemma 2 in \cite{CCS:BLMG21} to prove this via the same approach.
+\end{proof}
+
+\smallskip\noindent\textbf{Extends to finer false-positive rates.}
+We introduce an approach to achieve finer false-positive rates ($\rho\ne\frac{1}{2^t}$) in fuzzy tracking (and also $\fmd$) schemes.
+As mentioned in \cite{CCS:BLMG21}, to achieve finer rates like $\frac{1}{3}, \frac{1}{5}$ is easy via switching  the base. However, achieving rates like $\frac{3}{4}$ is still challenging without garbled circuits. We show how to achieve a rate like $\frac{\alpha}{2^k}$ where $1\le\alpha\le 2^k-1$ with a small tweak but $\alpha,k$ needs to be fixed in advance. The sender instead of computing $\enc(\pk_i,1)$ for each $i\in[n]$, it computes $c_i\gets\enc(\pk_i, \msg_i)$ where $\msg_i$ is uniformly sampled via $\msg_i\sample \{0,1,\dots,\alpha\}$. The detector only accepts the ciphertext $c_i$ if and only if $\dec(\sk_i,c_i)\le\alpha$. It is easy to see that this satisfies correctness, fuzziness and security simultaneously and is compatible with $\fmd_1,\fmd_2$ in \cite{CCS:BLMG21} and our fuzzy tracking scheme in~\cref{fig:fuzzy-tracking}. Essentially, the receiver is able to `tune' the false-positive rate $\rho$ via a finer step: Originally, $\rho$ can only be decreased half by half (i.e., from $\rho$ to $\frac{\rho}{2}$ each time); Now it can be decreased by a factor $\frac{\alpha}{2^k}$ (i.e., from $\rho$ to $\frac{\rho\alpha}{2^k}$). For example, if we choose $k=2, \alpha=3$, then we have rates set like $\{\frac{3}{4},\frac{3^2}{4^2},\dots,\frac{3^n}{4^n}\}$.
+
+\subsection{Analysis of Scalable Fuzzy Tracking }\label{sec:security_scalable_fuzzy}
+
+
+
+\smallskip\noindent\textbf{Security Analysis.}
+For adversaries without holding secret keys, arguments for security are the same as standard encryption.
+We consider the unlinkability defined in~\cref{def:unlink-with-key-fuzzy*}, then we argue it also satisfies unbiased fuzziness defined in~\cref{def:fuzzy*-tracking-unbias}. Intuitively, unlinkability is to make true-positive and false-positive indistinguishable from the tracking server; And unbiased fuzziness is to make the $\hint'$ of each potential $\mpk'$ uniformly random for the sender. 
+
+\noindent\textbf{Proof of Theorem~\ref{thm:scalable-abs}}
+We restate the theorem for unlinkability formally here.
+\begin{theorem}
+\label{thm:scalable-unlink}
+The fuzzy scalable stealth signature constructed in~\cref{fig:fuzzy*-tracking} is unlinkable with key exposure and fuzzy tracking. Specifically, for any $\secpar, N,\rho$, if there is a PPT adversary $\Ac$ has non-negligible advantage in experiment defined in~\cref{fig:experiment_unlink_with_key_exposure_fuzzy*}, then there exist other adversaries $\Bc$ running in roughly same time such that:
+\begin{align*}
+  \advantage{\unlinkfswke}{\secpar,N,\rho}[(\Ac)]  = \advantage{\unlinkwke}{\secpar}[(\Bc)] + \advantage{\mlwe}{\ell,q,\eta}[(\Cc)].
+\end{align*}
+\end{theorem}
+\begin{proof}
+First, consider the two hybrids as follows:
+
+\noindent\textbf{$\hyb_0$:} This is the standard experiment.
+
+\noindent\textbf{$\hyb_1$:} This only changes $\ftki_b$ to $\ftki_{1-b}$ when $\hint_0\in\lis\wedge\hint_1\in\lis$ whereas $\opk_b,\tki_b$ remain unchanged.
+\begin{claim}
+\label{clm: unlink}
+$\hyb_0$ and $\hyb_1$ are computationally indistinguishable to the adversary if the decisional $\mlwe$ holds.
+\end{claim}
+\begin{proof}
+Since we map each $\mpk$ to $\hint$, we only need to consider the case where $\hint_0\in\lis\wedge\hint_1\in\lis$ as otherwise $b'\sample\bin$ and $\Ac_2$ will not be invoked. 
+Without loss of generality, we assume $\ftki_b=\ftki_0$ and $\hint_0=\lis[i]$ which implies that, for $\lis$ generated from $\ftki_0$ and $\forall j\in[|\lis|]$, there is
+\begin{align*}
+    w_0^j ={}&\lceil \sn^T\cn_1^j-c_2\rfloor_2\oplus y^j\\
+          ={}&\lceil \frac{q}{2}(s_1(x^i-x^j)) + e'-\frac{q}{2}(w_0+y^i)\rfloor_2\oplus y^j\\
+          ={}&\lceil \frac{q}{2}(s_1(x^i-x^j)) + e'-\frac{q}{2}(w_0)\rfloor_2\oplus (y^i\oplus y^j)\\
+          ={}&\lceil \frac{q}{2}(w_0+e'+s_1(x^i-x^j))\rfloor_2 \oplus y^i\oplus y^j\\
+          ={}&w_0\oplus(y^i\oplus y^j)\oplus\lceil\frac{q}{2}(s_1(x^i-x^j))\rfloor_2,
+\end{align*}
+where $s_1$ is the first ring element of $\sn$ and $\hint_0=\msf{decode}_{R_q}(w_0)[:n]$.
+On the other hand, if $\hint_1$ (i.e., $w_1$) appears in the list with index $k$, i.e., $w_1=\lis[k]=w_0^k$, then the list can also be generated from $\ftki_1$ because $\forall j\in[|\lis|]:$
+\begin{align*}
+    w_1^j ={}& w_1 \oplus (y^k\oplus y^j)\oplus\lceil\frac{q}{2}(s_1(x^k-x^j))\rfloor_2\\
+    = {}& w_0^k \oplus (y^k\oplus y^j)\oplus\lceil\frac{q}{2}(s_1(x^k-x^j))\rfloor_2\\
+    = {}&w_0\oplus(y^i\oplus y^k)\oplus\lceil\frac{q}{2}(s_1(x^i-x^k))\rfloor_2\\
+    {}& \oplus (y^k\oplus y^j)\oplus\lceil\frac{q}{2}(s_1(x^k-x^j))\rfloor_2\\
+    = {}&w_0\oplus(y^i\oplus y^j)\oplus\lceil\frac{q}{2}(s_1(x^i-x^j))\rfloor_2\\
+    ={}& w_0^j,
+\end{align*}
+which means $\ftki_0$ and $\ftki_1$ will generate exactly the same list. Particularly, there is
+\begin{align*}
+    \frac{q}{2}(w_0+y^i+s_1x^i)
+    &= \frac{q}{2}(w_1+y^j+s_1x^j).
+\end{align*}
+Now consider the hybrids. We have $\ftki_0:=(\cn_1,c_2)$ and $\ftki_1:=(\cn_1',c_2')$, specifically,
+\begin{align*}
+    \cn_1 &= \An^T\rn+\en_1+\frac{q}{2}\cdot\begin{bmatrix}x^i\\0\end{bmatrix},
+     c_2 =\bn^T\rn+e_2+\frac{q}{2}\cdot(w_0+y^i)\\
+    \cn_1' &= \An^T\rn+\en_1+\frac{q}{2}\cdot\begin{bmatrix}x^j\\0\end{bmatrix},
+     c_2' =\bn^T\rn+e_2+\frac{q}{2}\cdot(w_1+y^j).
+\end{align*}
+
+Thus, there is
+\begin{align*}
+(\cn_1,c_2) 
+&\approx_c (\un+ \frac{q}{2}\cdot\begin{bmatrix}x^i\\0\end{bmatrix}, \sn^T\un+\frac{q}{2}\cdot(w_0+y^i) + e') \\
+&\approx_s (\un', \sn^T\un'+\frac{q}{2}\cdot(w_0+y^i-\sn^T\begin{bmatrix}x^i\\0\end{bmatrix}) + e')\\
+&=(\un', \sn^T\un'+\frac{q}{2}\cdot(w_0+y^i+s_1x^i) + e')\\
+&=(\un', \sn^T\un'+\frac{q}{2}\cdot(w_1+y^j+s_1x^j) + e')\\
+&\approx_c (\cn_1',c_2'),
+\end{align*}
+where $e'=e_2+\en^T\rn-\sn^T\en_1$ is the small noise term and $\un'=\un-\frac{q}{2}\cdot\begin{bmatrix}x^i\\0\end{bmatrix}$. Note that $\frac{q}{2} (+s_1x^i) = \frac{q}{2}(-s_1x^i)\mod q.$
+Therefore, we have shown that $\ftki_0$ and $\ftki_1$ are indistinguishable for the adversary. 
+\end{proof}
+Since $\ftki_b$ and $\ftki_{1-b}$ are indistinguishable and exchangeable for $\Ac$ in $\unlinkfswke$.
+Now we show that $\Bc$ can fully simulate the $\unlinkfswke$ experiment as follows. Upon receiving $\mpk_0,\mpk_1$, $\opk_b,\tki_b,\osk_b$ from $\unlinkwke$, $\Bc$ sample $\ftk,\fpk$ then computes corresponding $\ftki_{b'}$ and $\lis$ for $b'\sample\bin$, such that $w_0\in\lis\wedge w_1\in\lis$ where $\hash(\mpk_0)=\msf{decode}_{R_q}(w_0)[:n]$ and $\hash(\mpk_1)=\msf{decode}_{R_q}(w_1)[:n]$.
+Then $\Bc$ forwards all of them to $\Ac$ of $\unlinkfswke$ and $\Ac$ cannot distinguish between $\ftki_0$ or $\ftki_1$ due to~\cref{clm: unlink}.
+If $\Ac$ has non-negligible advantage $u(\secpar)$ in $\unlinkfswke$, then $\Bc$ has the same non-negligible advantage $u(\secpar)$ in $\unlinkwke$.
+\end{proof}
+
+% \subsubsection{Proof of Theorem~\ref{thm:unbias}}
+We restate the theorem for $\uniubs$ formally here.
+\begin{theorem}
+\label{thm:unbias}
+If there is $n\le \frac{m}{2}$ where $m$ is a power of $2$, and $B_\eta$ is a centered binomial distribution,
+then the scalable fuzzy tracking constructed in~\cref{fig:fuzzy*-tracking} is information theoretically \emph{unbiased} and satisfies $\uniubs$ defined in~\cref{def:fuzzy*-tracking-unbias}. 
+\end{theorem}
+\begin{proof}
+If $\Ac$ is able to output valid $\mpk^i$ (i.e., valid $\hint^i$ and $w^i$), then for him, there is
+$$w^j = w^i\oplus y^i\oplus y^j\oplus \lceil\frac{q}{2}(s_1(x^i-x^j))\rfloor_2.$$
+Note that the coefficients of $\lceil\frac{q}{2}s_1\rfloor_2$ are uniformly random over $\bin^m$ because $s_1\sample B_\eta$ where $B_\eta$ is a centred binomial distribution. Moreover, since polynomial multiplication can be written as circular convolution, $\lceil\frac{q}{2}(s_1(x^i-x^j))\rfloor_2$ can be written as $\Xn\sn \mod 2$ where $\sn\gets\msf{decode}_{R_q}(\lceil\frac{q}{2}s_1\rfloor_2)$ and $\Xn$ is the circulant matrix represented by the polynomial $x\gets\lceil\frac{q}{2}(x^i-x^j)\rfloor_2$. Specifically, the first column of $\Xn$ is $\msf{decode}_{R_q}(x)$ and other columns are rotational shifts of the previous column. 
+Since $m$ is a power of $2$, it only has divisors from $2^0$ to $2^{\log m}$. According to~\cref{lem:rank-circulant} and~\cref{def:cyclo}, the biggest divisor of $X^m-1$ is the polynomial $\Phi_m(X)=X^{\frac{m}{2}}+1$ with degree $\frac{m}{2}$. Thus the rank of $\Xn$ is at least $m-\frac{m}{2}$ and at least a half of elements in $\Xn\sn \mod 2$ are uniformly randomly distributed. This means $\hint^j\gets \msf{decode}_{R_q}(w^j)[:n]$ is uniformly random as long as $n\le \frac{m}{2}$.
+\end{proof}
+
