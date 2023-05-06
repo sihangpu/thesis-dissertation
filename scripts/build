@@ -3,6 +3,8 @@ BASEDIR=$(dirname $0)
 cd $BASEDIR
 cd ..
 
+# Build your dissertation with run `./scripts/build.command`.
+
 # Build the dissertation.
 xelatex dissertation
 bibtex dissertation
