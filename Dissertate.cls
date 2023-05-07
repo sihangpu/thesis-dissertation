@@ -239,8 +239,9 @@
 	\abstractpage
 	\tableofcontents
 	% \listoffigures % optional
-	\dedicationpage
-	\acknowledgments
+	% \dedicationpage
+	% \acknowledgments
+	\pagenumbering{arabic}
 }
 
 \renewcommand{\maketitle}{
