@@ -789,7 +789,7 @@ In addition, we have \begin{align*}
     &= G^{\sum_{i=1}^\ell m_i\sigma_{i,j} -\tau_{j}} =G^{y_j}
 \end{align*} in $\GG$.
 Thus, the proof is accepted as valid because $y_j\mod N^\xi=y_j\mod n$.
-\qed
+
 \end{proof}
 
 
@@ -817,10 +817,11 @@ We start by analyzing the distribution of $a_{j}$. First note that, \begin{align
 \end{align*}
 
 
-To see that $a_{j}$ is indistinguishable from one created in the real-world, note that by Lemma \ref{lemma:drown}, we have that $\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j} \approx_{\negl[\lambda]}\tau_{j}$, for $\tau_{j}\sample  \Phi_{\ZZ,\beta}$ and $m_i,\sigma_{i,j}\in\bin$, since $\lambda/\beta=\negl[\lambda]$. Hence, $$(1+N)^{\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j}} \approx_{\negl[\lambda]}(1+N)^{\tau_{j}}$$ and therefore $$c_0^{\alpha_j}\prod_{i=1}^\ell c_{2,i}^{\sigma_{i,j}}(1+N)^{\tau_{j}}\approx_{\negl[\lambda]} f_{j}^t(1+N)^{\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j}}.$$
+To see that $a_{j}$ is indistinguishable from one created in the real-world, note that by Lemma \ref{lemma:drown}, we have that $\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j} \approx_{\negl[\lambda]}\tau_{j}$, for $\tau_{j}\sample  \Phi_{\ZZ,\beta}$ and $m_i,\sigma_{i,j}\in\bin$, since $\lambda/\beta=\negl[\lambda]$. Hence, $$(1+N)^{\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j}} \approx_{\negl[\lambda]}(1+N)^{\tau_{j}}$$ and therefore 
+$$c_0^{\alpha_j}\prod_{i=1}^\ell c_{2,i}^{\sigma_{i,j}}(1+N)^{\tau_{j}}\approx_{\negl[\lambda]} f_{j}^t (1+N)^{\sum_{i=1}^\ell m_i\sigma_{i,j}-\tau_{j}}.$$
 
 An identical argument can be used to show that $K_j$ is indistinguishable from the one created in the real protocol.
-\qed
+% 
 \end{proof}
 
 
@@ -908,7 +909,7 @@ Since $\alpha_j\sample \ZZ_N$, we can build a hybrid where $\alpha_j$ is sampled
  \end{claim}
 
 Assume that $\Ac$ outputs $(x^*,\pi^*)$ where $x^*\notin \mathcal{EQ}_\Delta$. Since $\sigma_{i,j}\sample \bin$, then the proof gets accepted if equation \ref{eq:soundnessstatement} is fulfilled. As we have seen before, this happens only with negligible probability.
-\qed
+
 \end{proof}
 
 
@@ -1088,7 +1089,7 @@ Additionally, let  $\tilde r=r\prod_{i:q_i\neq p_j} q_i $ where $q_i\leftarrow\m
     & = h ^{\rho_j} \smod N^{\xi+1}.
 \end{align*}
 Hence, $R_j'=R_j$ and thus, $\ct_j=\mathsf{PKE.Enc}(\pk,b_j;R_j')$. Therefore, $b_j $ is added to $\Ic$. 
-\qed
+
 \end{proof}
 
 \begin{theorem}
@@ -1235,7 +1236,7 @@ Hybrids $\Hyb_2$ and $\Hyb_3$ are indistinguishable given that $\mathsf{PKE}$ is
 By the simulation soundness of $\mathsf{NIZK}_{\mathcal{REDJ}_\Delta}$, $\zeta_i<N^{\xi-1}/2$. Hence, $\zeta_i'<N^\xi/2$ and thus $\zeta_i'\smod N^\xi$ is equal to $\zeta_i'$ as an integer. Computing $\zeta=\zeta_i'/\phi(N)$ yields $\rho_i p_i$ over $\ZZ$. Thus $\rho_i=\zeta_i/p_i$ over $\ZZ$.
 
 Thus, performing the checks in this hybrid has the same outcome as in the real protocol.
-\qed
+
 \end{proof}
 
 
