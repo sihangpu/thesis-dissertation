@@ -256,7 +256,7 @@
 	\@degree\\
 	% in the subject of\\ \@field\\
 	\vspace{12pt}
-	of the\\ Faculty of Mathematics and Computer Science\\
+	of the Faculty of Mathematics and Computer Science\\
 	% \vspace{12pt}
 	of \@university\\ 
 	\vspace{36pt}
