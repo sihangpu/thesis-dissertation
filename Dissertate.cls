@@ -251,14 +251,19 @@
 	\begin{center}
 	\Huge \textcolor{SchoolColor}{\thetitle} \normalsize \\
 	\vspace{100pt}
-	\textsc{a dissertation presented \\ by\\
-	\theauthor\\ to\\ The Department of \@department\\
+	\textsc{a dissertation submitted towards the degree of\\
 	\vspace{12pt}
-	in partial fulfillment of the requirements\\
-	for the degree of\\ \@degree\\
-	in the subject of\\ \@field\\
+	\@degree\\
+	% in the subject of\\ \@field\\
 	\vspace{12pt}
-	\@university\\ \@universitycity, \@universitystate\\
+	of the\\ Faculty of Mathematics and Computer Science\\
+	% \vspace{12pt}
+	of \@university\\ 
+	\vspace{36pt}
+	by\\
+	\theauthor\\
+	\vspace{24pt}
+	\@universitycity, \@universitystate\\
 	\@degreemonth\ \@degreeyear}
 	\end{center} \vspace*{\fill}
 }
