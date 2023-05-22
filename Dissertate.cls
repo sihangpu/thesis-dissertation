@@ -263,8 +263,7 @@
 	by\\
 	\theauthor\\
 	\vspace{24pt}
-	\@universitycity, \@universitystate\\
-	\@degreemonth\ \@degreeyear}
+	\@universitycity, \@degreeyear}
 	\end{center} \vspace*{\fill}
 }
 
