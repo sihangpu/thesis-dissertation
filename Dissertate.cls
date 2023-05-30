@@ -236,6 +236,7 @@
 	\input{frontmatter/personalize}
 	\maketitle
 	\copyrightpage
+	\abstractGermanpage
 	\abstractpage
 	\tableofcontents
 	% \listoffigures % optional
@@ -276,6 +277,27 @@
 	\vspace*{\fill}
 	\newpage
 	\rm
+}
+
+\newcommand{\abstractGermanpage}{
+	\newpage
+	% \pagenumbering{roman}
+	% \setcounter{page}{3}
+	% \pagestyle{fancy}
+	\thispagestyle{empty}
+	% \lhead{Thesis Betreuer: Dr. \@advisor} 
+	% \rhead{\@author}
+	\renewcommand{\headrulewidth}{0.0pt}
+	\vspace*{35pt}
+	\begin{center}
+	% \Large \textcolor{SchoolColor}{\@title} \normalsize \\
+	\vspace*{20pt}
+	\scshape Zusammenfassung \\ \rm
+	\end{center}
+	\input{frontmatter/abstractGerman.tex}
+	\vspace*{\fill}
+	\newpage \lhead{} \rhead{}
+	% \cfoot{\thepage}
 }
 
 \newcommand{\abstractpage}{
