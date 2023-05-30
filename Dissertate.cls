@@ -100,8 +100,11 @@
 \RequirePackage{url}
 \usepackage{fetchcls,enumitem}
 \RequirePackage{mathspec}
-\setmathsfont(Digits,Latin,Greek)[Numbers={Proportional}]{EB Garamond}
-\setmathrm{EB Garamond}
+% \usepackage{pxfonts}
+% \setmathsfont(Digits,Latin,Greek)[Numbers={Proportional}]{EB Garamond}
+% \setmathrm{EB Garamond}
+\setmathsfont(Digits,Latin,Greek)[Numbers={Proportional}]{Palatino}
+\setmathrm{Palatino}
 \AtBeginEnvironment{tabular}{\addfontfeature{RawFeature=+tnum}}
 \widowpenalty=300
 \clubpenalty=300
@@ -252,7 +255,7 @@
 	\begin{center}
 	\Huge \textcolor{SchoolColor}{\thetitle} \normalsize \\
 	\vspace{100pt}
-	\textsc{a dissertation submitted towards the degree of\\
+	\textsc{A dissertation submitted towards the degree of\\
 	\vspace{12pt}
 	\@degree\\
 	% in the subject of\\ \@field\\
