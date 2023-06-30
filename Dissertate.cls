@@ -103,8 +103,8 @@
 % \usepackage{pxfonts}
 % \setmathsfont(Digits,Latin,Greek)[Numbers={Proportional}]{EB Garamond}
 % \setmathrm{EB Garamond}
-\setmathsfont(Digits,Latin,Greek)[Numbers={Proportional}]{Palatino Linotype}
-\setmathrm{Palatino Linotype}
+\setmathsfont(Digits,Latin,Greek)[Numbers={Proportional}]{Palatino}
+\setmathrm{Palatino} % Palatino Linotype for Windows
 \AtBeginEnvironment{tabular}{\addfontfeature{RawFeature=+tnum}}
 \widowpenalty=300
 \clubpenalty=300
