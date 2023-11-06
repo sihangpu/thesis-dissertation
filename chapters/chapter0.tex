@@ -6,7 +6,7 @@
 
 We denote by $\lambda \in\mathbb{N}$ the security parameter, by $\poly[\lambda]$ any function that is bounded by a polynomial in $\secpar$, and by $\negl[\lambda]$ any
 function that is negligible in the security parameter. We abbreviate the computational indistinguishability of two distributions by $\approx_c$. The set of $N$ elements is always written as $[N]$. We also denote as $\Dc^\Oc$ a distinguisher $\Dc$ access to an oracle $\Oc$ via classical queries and $\Ac^{|\Oc\rangle}$ via quantum queries. 
-If $S$ is a finite set, then  $x\sample S$  denotes an element $x$ sampled from $S$ according to a uniform distribution and $|S|$ denotes the cardinality of $S$.
+If $S$ is a finite set, then  $x\sample S$  denotes an element $x$ sampled from $S$ according to a uniform distribution and $|S|$ denotes the cardinality of $S$; If \(\Dc\) is a distribution, we use \(x\sample\Dc\) denote an element \(x\) sampled according to the distribution \(\Dc\).
 For two vectors $\un,\vn\in\FF^n$ over a finite field $\FF$, we denote by $\un\odot \vn$ their component-wise multiplication. We denote by $\mathsf{Supp}(\un)$ the support of $\un$, that is, the set of indices where $\un$ is different from $0$.\footnote{If there is only one index different from zero, $\mathsf{Supp}(\un)$ denotes this index.} For $S\subseteq [n]$, $\un_S$ denotes the vector $(\un_i)_{i\in S}$. Finally, $\un^T$ denotes the transpose of $\un$ and $\mathsf{hw}(\un)$ denotes the hamming weight of $\un$ (that is, the number of coordinates of $\un$ different from $0$).
 
 
@@ -17,7 +17,7 @@ $$
 \end{definition}
 
 Recall min-entropy of a random variable $A$ is 
-$$H_\infty(A):=-\log(\max_a \prob{A=a}),$$
+$$H_\infty(A):=-\log_2(\max_a \prob{A=a}),$$
 then we have the following lemma.
 \begin{lemma}[Leftover Hash Lemma\cite{STOC:ImpLevLub89}]
 Assume a family of functions $\{\hash_x:\bin^n\mapsto\bin^m\}_{x\in\Xc}$ is universal: $\forall\, a\ne b\in\bin^n$, $\Pr_{x\in\Xc}[\hash_x(a)=\hash_x(b)]=2^{-m}$. Then, for any random variable $W$,
@@ -143,7 +143,7 @@ Let $\pke := (\gen, \enc, \dec)$ be a public-key encryption scheme for the messa
 space $\bin^n$. For any $\secpar\in\NN$, uniformly sampled message $\mn\sample\bin^n$, we say $\pke$ is $\uniamb$-secure if
 \begin{align*}
     \advantage{\uniamb}{\secpar}[(\Ac)] :=
-    \Big|\Pr[\uniamb^\Ac_\pke(\secpar)\Rightarrow 0] &-\\\Pr[\uniamb^\Ac_\pke(\secpar)\Rightarrow 1] \Big|
+    \Big|\Pr[\uniamb^\Ac_\pke(\secpar)= 0] &-\\\Pr[\uniamb^\Ac_\pke(\secpar)= 1] \Big|
     \le \negl[\secpar],
 \end{align*}
 where the experiment $\uniamb^\Ac_\pke(\secpar)$ is defined in~\cref{fig:experiment_ambiguous}.

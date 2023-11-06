@@ -59,7 +59,7 @@ Labelled PSI has several practical applications (e.g., private web service queri
 \paragraph{DV-NIZK range proofs for DJ ciphertexts.}
 
 As a building block for our laconic PSI protocol, we propose a Designated-Verifier Non-Interactive Zero-Knowledge (DV-NIZK\footnotemark) scheme for range proof with Damg{\aa}rd Jurik (DJ) ciphertexts, which may be of independent interest. 
-Our DV-NIZK has statistical simulation soundness and computational zero-knowledge given that the subgroup decision (SD) assumption holds \cite{TCC:BonGohNis05,EC:GroOstSah06}.
+Our DV-NIZK has statistical simulation soundness and computational zero-knowledge given that the subgroup decision (subgroup decision) assumption holds \cite{TCC:BonGohNis05,EC:GroOstSah06}.
  
 \footnotetext{DV-NIZK \emph{only} allows the designated prover to prove that it holds a witness for a certain $\npol$ statement to a verifier in just one message}
 
@@ -690,7 +690,7 @@ This is not a linear language and, thus, it cannot be instantiated using the fra
 
 \begin{lemma}[\cite{EC:GroOstSah06}]
 \label{lemma:GOSproof}
-There exists a reusable DV-NIZK scheme\footnote{The scheme presented in \cite{EC:GroOstSah06} is a NIZK scheme and not a DV-NIZK. However, we can view a NIZK as a DV-NIZK where $\td=\perp$.} $$\mathsf{NIZK}_{\mathcal{BGN}_\Delta}=(\mathsf{NIZK.GenCRS}_{\mathcal{BGN}_\Delta},\mathsf{NIZK.Prove}_{\mathcal{BGN}_\Delta},\mathsf{NIZK.Verify}_{\mathcal{BGN}_\Delta})$$ for the language $\mathcal{BGN}$. The protocol has perfect reusable soundness and computational zero-knowledge under the SD assumption.
+There exists a reusable DV-NIZK scheme\footnote{The scheme presented in \cite{EC:GroOstSah06} is a NIZK scheme and not a DV-NIZK. However, we can view a NIZK as a DV-NIZK where $\td=\perp$.} $$\mathsf{NIZK}_{\mathcal{BGN}_\Delta}=(\mathsf{NIZK.GenCRS}_{\mathcal{BGN}_\Delta},\mathsf{NIZK.Prove}_{\mathcal{BGN}_\Delta},\mathsf{NIZK.Verify}_{\mathcal{BGN}_\Delta})$$ for the language $\mathcal{BGN}$. The protocol has perfect reusable soundness and computational zero-knowledge under the subgroup decision assumption.
 \end{lemma}
 
 \subsection{Equality of Plaintexts in DJ and BGN ciphertexts.}
@@ -794,7 +794,7 @@ Thus, the proof is accepted as valid because $y_j\mod N^\xi=y_j\mod n$.
 
 
 \begin{lemma}
-The scheme presented in Construction \ref{construction:equalityBGNDJ} has zero knowledge under the SD assumption.
+The scheme presented in Construction \ref{construction:equalityBGNDJ} has zero knowledge under the subgroup decision assumption.
 \end{lemma}
 
 
@@ -808,7 +808,7 @@ Let $\Sim_1$, $\Sim_2$, $\Sim_3$ and $\Sim_3'$ be the zero-knowledge simulators 
     \item Upon receiving an instance $(D_0,h_0\{D_i,c_{1,i},c_{2,i}\}_{i\in [\ell]})$, $\Sim_\mathsf{ZK}$ first simulates $\pi_1\leftarrow\mathsf{Sim}_1(\td_1,x_1)$, $\pi_2\leftarrow\mathsf{Sim}_2(\td_2,x_2)$, $\pi_3\leftarrow\mathsf{Sim}_3(\td_3,x_3)$ and $\pi_3'\leftarrow\mathsf{Sim}_3(\td_3,x'_3)$. Then, it repeats the following for every $j\in [\lambda]$: It samples $\tau_{j}\sample \Phi_{\ZZ,\beta}$ and computes $a_{j}=(1+N)^{\tau_{j}}c_0^{\alpha_j} \prod c_{2,i}^{\sigma_{i,j}}\smod N^{\xi+1}$ and $K_j=G^{\tau_{j}}H_0^{A_j}\prod D_i^{\sigma_{i,j}}$.
     \item It outputs $\pi=(\{a_{j},K_j\}_{j\in [\lambda]},\pi_1,\pi_2,\pi_3)$.
 \end{itemize}
-We now argue that the distributions of the proofs outputted by $\mathsf{Prove}_{\mathcal{EQ}_\Delta}$ and $\Sim_\mathsf{ZK}$ are indistinguishable. By the zero-knowledge property of $\mathsf{NIZK}_{\mathcal{BGN}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{DJ}_{\Delta_2}}$, $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3}}$ and $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3'}}$ the proofs $\pi_1$, $\pi_2$, $\pi_3$ and $\pi_3'$ are indistinguishable from the real ones ($\pi_1$ is computationally indistinguishable given that the SD assumption holds). So, we just need to analyze the distributions of $a_{j}$ and $K_j$.
+We now argue that the distributions of the proofs outputted by $\mathsf{Prove}_{\mathcal{EQ}_\Delta}$ and $\Sim_\mathsf{ZK}$ are indistinguishable. By the zero-knowledge property of $\mathsf{NIZK}_{\mathcal{BGN}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{DJ}_{\Delta_2}}$, $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3}}$ and $\mathsf{NIZK}_{\mathcal{SM}_{\Delta_3'}}$ the proofs $\pi_1$, $\pi_2$, $\pi_3$ and $\pi_3'$ are indistinguishable from the real ones ($\pi_1$ is computationally indistinguishable given that the subgroup decision assumption holds). So, we just need to analyze the distributions of $a_{j}$ and $K_j$.
 
 
 We start by analyzing the distribution of $a_{j}$. First note that, \begin{align*}
@@ -982,10 +982,10 @@ Let $c_1\in\mathcal{REDJ}_\Delta$. Then, by the completeness of $\mathsf{NIZK}_{
 
 \begin{lemma}
 \label{lemma:zkrangeDJ}
-The scheme presented in Construction \ref{construction:rangeDJ} has zero knowledge under the SD assumption.
+The scheme presented in Construction \ref{construction:rangeDJ} has zero knowledge under the subgroup decision assumption.
 \end{lemma}
 \begin{proof}
-The proof follows from the fact that the schemes $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{EPDJ}_{\Delta_2}}$ and $\mathsf{NIZK}_{\mathcal{EDL}_{\Delta_3}}$ are zero-knowledge (here $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}$ has computational zero-knowledge under the SD assumption).
+The proof follows from the fact that the schemes $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}$, $\mathsf{NIZK}_{\mathcal{EPDJ}_{\Delta_2}}$ and $\mathsf{NIZK}_{\mathcal{EDL}_{\Delta_3}}$ are zero-knowledge (here $\mathsf{NIZK}_{\mathcal{EQ}_{\Delta_1}}$ has computational zero-knowledge under the subgroup decision assumption).
 
 \end{proof}
 
