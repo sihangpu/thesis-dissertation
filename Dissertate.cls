@@ -239,6 +239,7 @@
 	\input{frontmatter/personalize}
 	\maketitle
 	\copyrightpage
+	\oraldefense
 	\abstractGermanpage
 	\abstractpage
 	\tableofcontents
@@ -337,6 +338,14 @@
 	\pagenumbering{arabic}
 }
 
+\newcommand{\oraldefense}{
+	\chapter*{Defense Details}
+	\noindent
+	\input{frontmatter/oraldefense}
+	\vspace*{\fill} \newpage
+	\setcounter{page}{1}
+	\pagenumbering{arabic}
+}
 
 \renewcommand{\backmatter}{
     \begin{appendices}
